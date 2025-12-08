@@ -1,11 +1,13 @@
-# Core dependencies
-torch>=2.0.0
-transformers>=4.36.0
-accelerate>=0.25.0
+# Core dependencies - faster-whisper
+# Note: faster-whisper requires ctranslate2 and its dependencies
+ctranslate2>=4.0.0
+tokenizers>=0.13.0
+huggingface-hub>=0.13.0
+faster-whisper>=1.0.0
 
 # Audio processing
 soundfile>=0.12.1
+numpy>=1.24.0
 
 # CLI and UI
 rich>=13.0.0
-tqdm>=4.65.0

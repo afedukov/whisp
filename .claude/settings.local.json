@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "mcp__context7__resolve-library-id",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(brew list:*)"
     ],
     "deny": [],
     "ask": []
