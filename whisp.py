@@ -1119,7 +1119,7 @@ def record_and_transcribe(
         # Step 4: Cleanup
         if temp_wav_path and temp_wav_path.exists():
             if CONFIG["recording"].get("keep_recording", False):
-                console.print(f"[dim]Recording saved: {temp_wav_path}[/dim]")
+                console.print(f"\n[bold green]✓[/bold green] [bold cyan]Recording saved:[/bold cyan] [green]{temp_wav_path}[/green]")
             else:
                 try:
                     os.unlink(temp_wav_path)
@@ -1445,7 +1445,7 @@ Modes:
                 # Single file mode
                 transcribe_audio(input_path, args.output_file, args.language, args.model)
     except KeyboardInterrupt:
-        console.print("\n\n[yellow]! Operation cancelled by user[/yellow]")
+        console.print("\n\n[yellow]Operation cancelled by user[/yellow]")
         console.print("[dim]Exiting gracefully...[/dim]\n")
         sys.exit(130)  # Standard exit code for SIGINT
 
