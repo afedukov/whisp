@@ -1,6 +1,6 @@
 # 🎙️ Whisper
 
-Beautiful command-line application for transcribing audio files using [OpenAI Whisper Large-v3](https://huggingface.co/openai/whisper-large-v3) model.
+Command-line application for transcribing audio files using [OpenAI Whisper Large-v3](https://huggingface.co/openai/whisper-large-v3) model (and others).
 
 Powered by [faster-whisper](https://github.com/SYSTRAN/faster-whisper) for **4-8x faster** transcription compared to standard implementations.
 
