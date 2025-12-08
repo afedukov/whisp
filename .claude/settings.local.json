@@ -3,7 +3,8 @@
     "allow": [
       "mcp__context7__resolve-library-id",
       "Bash(ls:*)",
-      "Bash(brew list:*)"
+      "Bash(brew list:*)",
+      "Bash(python3:*)"
     ],
     "deny": [],
     "ask": []
