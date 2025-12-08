@@ -479,7 +479,9 @@ def load_model(device: str, model_size: str = "large"):
 
 
 def transcribe_audio(audio_file: Path, output_file: Path, language: str = None, model_size: str = "large"):
-    """Transcribe audio file to text"""
+    """Transcribe audio file to text (displayed as batch mode with 1 file)"""
+    from rich.table import Table
+    from rich.live import Live
 
     print_header(model_size)
 
@@ -487,19 +489,17 @@ def transcribe_audio(audio_file: Path, output_file: Path, language: str = None, 
     if not check_file_exists(audio_file):
         sys.exit(1)
 
-    # Determine device (faster-whisper handles this internally)
+    console.print(f"\n[dim]Input: {audio_file}[/dim]")
+    console.print(f"[dim]Output: {output_file}[/dim]")
+
+    # Determine device
     try:
         import torch
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        console.print(f"\n[dim]Device: {device}[/dim]")
-
-        if torch.cuda.is_available():
-            gpu_name = torch.cuda.get_device_name(0)
-            console.print(f"[dim]GPU: {gpu_name}[/dim]")
+        console.print(f"[dim]Device: {device}[/dim]")
     except ImportError:
-        # torch not installed, use CPU
         device = "cpu"
-        console.print(f"\n[dim]Device: {device}[/dim]")
+        console.print(f"[dim]Device: {device}[/dim]")
 
     # Load model
     try:
@@ -508,103 +508,120 @@ def transcribe_audio(audio_file: Path, output_file: Path, language: str = None, 
         console.print(f"\n[bold red]✗[/bold red] Failed to load model: {str(e)}")
         sys.exit(1)
 
-    try:
-        import time
-        
-        # Get audio duration
-        audio_duration = get_audio_duration(audio_file)
-        duration_str = format_duration(audio_duration) if audio_duration > 0 else "unknown"
+    # Get audio duration
+    audio_duration = get_audio_duration(audio_file)
 
-        # Transcribe
-        console.print(f"\n[bold cyan]Transcribing audio file...[/bold cyan]")
-        console.print(f"[dim]Input: {audio_file}[/dim]")
-        console.print(f"[dim]Duration: {duration_str}[/dim]")
-        
-        transcribe_start_time = time.time()
+    # Initialize status tracking
+    file_status = [""]  # "" = pending, "spinner MM:SS" = processing, "✓ N words" = done
+    processing_start_time = [0.0]
 
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            TimeElapsedColumn(),
-            console=console
-        ) as progress:
-            task = progress.add_task(
-                f"Processing {duration_str} of audio...",
-                total=None
-            )
+    import time
+    import threading
 
-            # Transcribe with faster-whisper (handles all formats via ffmpeg)
-            segments, info = model.transcribe(
-                str(audio_file),
-                language=language,
-                task="transcribe",
-                beam_size=CONFIG["transcription"]["beam_size"],
-                vad_filter=CONFIG["transcription"]["vad_filter"],
-                vad_parameters=dict(min_silence_duration_ms=CONFIG["transcription"]["min_silence_duration_ms"])
-            )
+    # Spinner animation frames
+    spinner_frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+    spinner_index = [0]
 
-            # Collect all segments into full transcription
-            transcription_parts = []
-            for segment in segments:
-                transcription_parts.append(segment.text)
+    def make_table():
+        """Create progress table for single file"""
+        table = Table(box=box.ROUNDED, border_style="cyan")
+        table.add_column("#", style="dim", width=4, justify="right")
+        table.add_column("File", style="cyan", no_wrap=True)
+        table.add_column("Duration", style="green", justify="right", width=8)
+        table.add_column("Status", justify="left", width=16)
 
-            transcription = " ".join(transcription_parts).strip()
+        dur_str = format_duration(audio_duration) if audio_duration > 0 else "?"
 
-            progress.update(task, completed=True)
+        # Show spinner if processing
+        if processing_start_time[0] > 0 and file_status[0] == "":
+            elapsed = time.time() - processing_start_time[0]
+            elapsed_str = format_duration(elapsed)
+            spinner = spinner_frames[spinner_index[0] % len(spinner_frames)]
+            status = f"[yellow]{spinner} {elapsed_str}[/yellow]"
+        else:
+            status = file_status[0]
 
-        # Log detected language
-        if info.language_probability > 0:
-            console.print(f"[dim]Detected language: {info.language} (confidence: {info.language_probability:.2%})[/dim]")
+        table.add_row("1", audio_file.name, dur_str, status)
+        return table
 
-        # Save to file
-        console.print(f"\n[bold cyan]Saving transcription...[/bold cyan]")
-        output_file.write_text(transcription, encoding='utf-8')
+    stop_refresh = threading.Event()
 
-        console.print(f"[bold green]✓[/bold green] Transcription saved to: {output_file}")
+    def refresh_loop(live):
+        """Background thread to animate spinner"""
+        while not stop_refresh.is_set():
+            spinner_index[0] += 1
+            live.update(make_table())
+            time.sleep(0.1)
 
-        # Display preview
-        preview_length = CONFIG["output"]["preview_length"]
-        preview = transcription[:preview_length]
-        if len(transcription) > preview_length:
-            preview += "..."
+    # Process with live table
+    console.print(f"\n[bold cyan]Processing...[/bold cyan]")
 
-        console.print("\n[bold cyan]Preview:[/bold cyan]")
-        console.print(Panel(
-            preview,
-            box=box.ROUNDED,
-            border_style="green",
-            padding=(1, 2)
-        ))
+    batch_start_time = time.time()
 
-        # Stats
-        from rich.table import Table
-        
-        processing_time = time.time() - transcribe_start_time
-        speed_ratio = audio_duration / processing_time if processing_time > 0 and audio_duration > 0 else 0
-        
-        word_count = len(transcription.split())
-        char_count = len(transcription)
-        
-        console.print("\n[bold cyan]Stats:[/bold cyan]")
-        stats_table = Table(box=box.ROUNDED, border_style="green", show_header=False)
-        stats_table.add_column("Metric", style="dim")
-        stats_table.add_column("Value", style="bold")
-        stats_table.add_row("Duration", duration_str)
-        stats_table.add_row("Processing time", format_duration(processing_time))
-        stats_table.add_row("Speed", f"{speed_ratio:.1f}x realtime")
-        stats_table.add_row("Words", f"{word_count:,}")
-        stats_table.add_row("Characters", f"{char_count:,}")
-        console.print(stats_table)
+    with Live(make_table(), console=console, refresh_per_second=4) as live:
+        # Start background refresh thread
+        refresh_thread = threading.Thread(target=refresh_loop, args=(live,), daemon=True)
+        refresh_thread.start()
 
-        console.print("\n[bold green]Transcription completed successfully![/bold green]\n")
+        try:
+            # Start processing
+            processing_start_time[0] = time.time()
+            live.update(make_table())
 
-    except KeyboardInterrupt:
-        console.print("\n\n[yellow]! Transcription cancelled by user[/yellow]")
-        console.print("[dim]Cleaning up...[/dim]\n")
-        raise  # Re-raise to be caught by main()
-    except Exception as e:
-        console.print(f"\n[bold red]✗[/bold red] Transcription failed: {str(e)}")
-        sys.exit(1)
+            # Transcribe
+            transcription, info = transcribe_single_file(model, audio_file, language, quiet=True)
+
+            # Update status to done
+            word_count = len(transcription.split())
+            file_status[0] = f"[green]✓ {word_count} words[/green]"
+            processing_start_time[0] = 0
+            live.update(make_table())
+
+        except Exception as e:
+            file_status[0] = f"[red]✗ error[/red]"
+            processing_start_time[0] = 0
+            live.update(make_table())
+            raise
+        finally:
+            stop_refresh.set()
+            refresh_thread.join(timeout=1)
+
+    # Save transcription
+    console.print(f"\n[bold cyan]Saving transcription...[/bold cyan]")
+    output_file.write_text(transcription, encoding='utf-8')
+    console.print(f"[bold green]✓[/bold green] Saved to: {output_file}")
+
+    # Display preview
+    preview_length = CONFIG["output"]["preview_length"]
+    preview = transcription[:preview_length]
+    if len(transcription) > preview_length:
+        preview += "..."
+
+    console.print("\n[bold cyan]Preview:[/bold cyan]")
+    console.print(Panel(
+        preview,
+        box=box.ROUNDED,
+        border_style="green",
+        padding=(1, 2)
+    ))
+
+    # Stats
+    processing_time = time.time() - batch_start_time
+    speed_ratio = audio_duration / processing_time if processing_time > 0 and audio_duration > 0 else 0
+    char_count = len(transcription)
+
+    console.print("\n[bold cyan]Stats:[/bold cyan]")
+    stats_table = Table(box=box.ROUNDED, border_style="green", show_header=False)
+    stats_table.add_column("Metric", style="dim")
+    stats_table.add_column("Value", style="bold")
+    stats_table.add_row("Duration", format_duration(audio_duration) if audio_duration > 0 else "unknown")
+    stats_table.add_row("Processing time", format_duration(processing_time))
+    stats_table.add_row("Speed", f"{speed_ratio:.1f}x realtime")
+    stats_table.add_row("Words", f"{word_count:,}")
+    stats_table.add_row("Characters", f"{char_count:,}")
+    console.print(stats_table)
+
+    console.print("\n[bold green]Transcription completed successfully![/bold green]\n")
 
 
 # =============================================================================
@@ -1230,14 +1247,18 @@ def transcribe_batch(input_dir: Path, output_file: Path, language: str = None, m
         sys.exit(1)
     
     # Initialize status tracking
-    # Status: "" = pending, "⏹ MM:SS" = in progress with elapsed time, "✓ N words" = done, "✗ error" = failed
+    # Status: "" = pending, "spinner MM:SS" = in progress with elapsed time, "✓ N words" = done, "✗ error" = failed
     file_statuses = ["" for _ in audio_files]
     current_file_index = [-1]  # Use list to allow mutation from inner function
     processing_start_time = [0.0]
-    
+
     import time
     import threading
-    
+
+    # Spinner animation frames
+    spinner_frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+    spinner_index = [0]  # Use list to allow mutation
+
     def make_table():
         """Create the progress table with current statuses"""
         table = Table(box=box.ROUNDED, border_style="cyan")
@@ -1245,16 +1266,18 @@ def transcribe_batch(input_dir: Path, output_file: Path, language: str = None, m
         table.add_column("File", style="cyan", no_wrap=True)
         table.add_column("Duration", style="green", justify="right", width=8)
         table.add_column("Status", justify="left", width=16)
-        
+
         for i, (f, dur, status) in enumerate(zip(audio_files, file_durations, file_statuses), 1):
             dur_str = format_duration(dur) if dur > 0 else "?"
-            # If this is the currently processing file, show elapsed time
+            # If this is the currently processing file, show animated spinner with elapsed time
             if i - 1 == current_file_index[0] and processing_start_time[0] > 0:
                 elapsed = time.time() - processing_start_time[0]
                 elapsed_str = format_duration(elapsed)
-                status = f"[yellow]⏹ {elapsed_str}[/yellow]"
+                # Get current spinner frame
+                spinner = spinner_frames[spinner_index[0] % len(spinner_frames)]
+                status = f"[yellow]{spinner} {elapsed_str}[/yellow]"
             table.add_row(str(i), f.name, dur_str, status)
-        
+
         return table
     
     # Process files with live table
@@ -1268,10 +1291,11 @@ def transcribe_batch(input_dir: Path, output_file: Path, language: str = None, m
     stop_refresh = threading.Event()
     
     def refresh_loop(live):
-        """Background thread to refresh elapsed time"""
+        """Background thread to refresh elapsed time and animate spinner"""
         while not stop_refresh.is_set():
+            spinner_index[0] += 1  # Advance spinner animation
             live.update(make_table())
-            time.sleep(0.5)
+            time.sleep(0.1)  # Faster refresh for smooth spinner animation
     
     with Live(make_table(), console=console, refresh_per_second=4) as live:
         # Start background refresh thread
