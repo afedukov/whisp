@@ -162,6 +162,18 @@ whisp ./recordings/          # Instead of: python whisp.py ./recordings/
 
 If you used **Option B**, use `python whisp.py` instead.
 
+### Creating a permanent alias (Optional)
+
+To run `whisp` from any directory without manually activating the virtual environment every time, you can add an alias to your shell configuration (e.g., `~/.zshrc`).
+
+Run this command from the project root directory:
+
+```bash
+echo "alias whisp=\"$(pwd)/venv/bin/whisp\"" >> ~/.zshrc
+source ~/.zshrc
+```
+
+
 ## 💻 Usage
 
 ### Single File Transcription
@@ -275,6 +287,10 @@ python whisp.py --help
 ## ⚙️ Configuration
 
 The application can be configured via `config.yaml` file. All settings have sensible defaults.
+    
+    **Configuration Loading Order (Priority High to Low):**
+    1. `~/.whisp/config.yaml` in user home directory (User global)
+    2. `config.yaml` in application directory (Default)
 
 ### Transcription Settings
 - `default_language`: Auto-detect if empty, or specify (e.g., "en", "de", "ru")

@@ -88,23 +88,38 @@ def load_config() -> dict:
     """
     import yaml
     
-    config_path = Path(__file__).parent / "config.yaml"
     config = DEFAULT_CONFIG.copy()
     
-    if config_path.exists():
-        try:
-            with open(config_path, 'r', encoding='utf-8') as f:
-                user_config = yaml.safe_load(f)
-            
-            if user_config:
-                # Deep merge user config with defaults
-                for section in DEFAULT_CONFIG:
-                    if section in user_config and isinstance(user_config[section], dict):
-                        config[section] = {**DEFAULT_CONFIG[section], **user_config[section]}
-        except Exception as e:
-            console.print(f"[yellow]Warning: Could not load config.yaml: {e}[/yellow]")
-            console.print("[dim]Using default configuration[/dim]")
+    # 1. App directory config (default/global)
+    app_config_path = Path(__file__).parent / "config.yaml"
     
+    # 2. User home config (~/.whisp/config.yaml)
+    home_config_path = Path.home() / ".whisp" / "config.yaml"
+    
+    # Load in order of priority (lowest to highest)
+    config_paths = [
+        (app_config_path, "App"),
+        (home_config_path, "Home")
+    ]
+    
+    for path, source in config_paths:
+        if path.exists():
+            try:
+                with open(path, 'r', encoding='utf-8') as f:
+                    user_config = yaml.safe_load(f)
+                
+                if user_config:
+                    # Deep merge user config with defaults/previous
+                    for section in DEFAULT_CONFIG:
+                        if section in user_config and isinstance(user_config[section], dict):
+                            config[section] = {**config.get(section, DEFAULT_CONFIG[section]), **user_config[section]}
+                    
+                    # console might not be fully initialized or we want to be subtle, 
+                    # but since console is global, we can try using it if we really want debug info
+                    # For now, silent success is best, unless debugging.
+            except Exception as e:
+                console.print(f"[yellow]Warning: Could not load {source} config ({path}): {e}[/yellow]")
+
     return config
 
 # Load configuration at startup
