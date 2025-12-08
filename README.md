@@ -13,7 +13,7 @@ Powered by [faster-whisper](https://github.com/SYSTRAN/faster-whisper) for **4-8
 - 🌍 Automatic language detection or manual language specification
 - 📊 Beautiful progress indicators with Rich
 - 📝 Preview of transcription results
-- 🔄 Multiple model options (large, distil, medium, small, base)
+- 🔄 Multiple model options (large, turbo, medium, small, base)
 - 🎤 Voice activity detection (VAD) to skip silence
 - 📥 Resumable model downloads with progress bar
 
@@ -134,7 +134,7 @@ python whisp.py audio.wav transcript.txt --model large --language en
 | Model | Size | Accuracy | Speed | Recommendation |
 |-------|------|----------|-------|----------------|
 | **large** | ~3GB | Best | Slow | ✅ Default, for academic content |
-| **distil** | ~1.5GB | Good | 6x faster | ⚡ English-optimized, fast |
+| **turbo** | ~800MB | Good | 8x faster | ⚡ Fast multilingual |
 | **medium** | ~1.5GB | Good | 2-3x faster | ⚖️ Balance of speed and quality |
 | **small** | ~466MB | Basic | Fast | 🚀 For simple tasks |
 | **base** | ~145MB | Basic | Very fast | 🏃 Minimal accuracy |
@@ -148,7 +148,7 @@ python whisp.py lecture.mp3 transcript.txt --model large --language de
 
 **Fast English podcast transcription:**
 ```bash
-python whisp.py podcast.m4a transcript.txt --model distil --language en
+python whisp.py podcast.m4a transcript.txt --model turbo --language de
 ```
 
 **Good balance for any language:**
@@ -160,6 +160,25 @@ python whisp.py interview.mp3 interview_text.txt --model medium
 ```bash
 python whisp.py test.mp3 test.txt --model base
 ```
+
+### Batch Mode (Directory Input)
+
+When you provide a directory instead of a file, all audio files are processed in **natural sort order** (1, 2, 10 instead of 1, 10, 2) and combined into a single output file.
+
+**Process all recordings in a folder:**
+```bash
+python whisp.py ./lectures/ combined_transcript.txt --language de --model medium
+```
+
+**Batch mode features:**
+- 📋 Shows table of all files with durations before processing
+- 🔢 Natural sorting (NeueAufnahme1, NeueAufnahme2, ..., NeueAufnahme10)
+- 📊 Progress bar with file counter
+- 📝 Combined output with file separators
+- 📈 Summary statistics at the end
+
+**Supported formats in batch mode:**
+`.mp3`, `.wav`, `.m4a`, `.flac`, `.ogg`, `.wma`, `.aac`, `.opus`
 
 ### Command help
 
@@ -232,7 +251,7 @@ Thanks to `faster-whisper` with CTranslate2 and int8 quantization:
 ### Model Selection Recommendations
 
 - **large** - use for academic lectures, medical recordings, technical documentation (any language)
-- **distil** - optimal choice for English content: podcasts, interviews, meetings
+- **turbo** - optimal for fast transcription with good accuracy (any language)
 - **medium** - good balance for any language on moderate hardware
 - **small** - for simple recordings with good audio quality
 - **base** - quick tests or very simple content

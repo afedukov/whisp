@@ -39,15 +39,15 @@ console = Console()
 # Available Whisper models (faster-whisper uses model size names directly)
 WHISPER_MODELS = {
     "large": "large-v3",
-    "distil": "distil-large-v3",  # Distilled version - faster with good accuracy (English-optimized)
+    "turbo": "large-v3-turbo",  # 8x faster than large-v3, multilingual (de, en, ru, etc.)
     "medium": "medium",
     "small": "small",
     "base": "base"
 }
 
 MODEL_INFO = {
-    "large": "Best accuracy, ~3GB (recommended for academic content)",
-    "distil": "Distilled large-v3, ~1.5GB, 6x faster (English-optimized)",
+    "large": "Best accuracy, ~3GB",
+    "turbo": "Large-v3-turbo, ~800MB, 8x faster, multilingual",
     "medium": "Good balance, ~1.5GB",
     "small": "Fast, ~466MB, lower accuracy",
     "base": "Very fast, ~145MB, basic accuracy"
@@ -185,7 +185,7 @@ def download_model_with_progress(model_id: str) -> str:
     # Map faster-whisper model names to HuggingFace repo names
     repo_map = {
         "large-v3": "Systran/faster-whisper-large-v3",
-        "distil-large-v3": "Systran/faster-distil-whisper-large-v3",
+        "large-v3-turbo": "deepdml/faster-whisper-large-v3-turbo-ct2",
         "medium": "Systran/faster-whisper-medium",
         "small": "Systran/faster-whisper-small",
         "base": "Systran/faster-whisper-base",
@@ -474,30 +474,243 @@ def transcribe_audio(audio_file: Path, output_file: Path, language: str = None, 
                 pass  # Ignore cleanup errors
 
 
+# =============================================================================
+# Batch Mode Functions
+# =============================================================================
+
+import re
+
+# Supported audio extensions for batch mode
+AUDIO_EXTENSIONS = {'.mp3', '.wav', '.m4a', '.flac', '.ogg', '.wma', '.aac', '.opus'}
+
+
+def natural_sort_key(path: Path) -> list:
+    """Generate a key for natural sorting (1, 2, 10 instead of 1, 10, 2)"""
+    def convert(text):
+        return int(text) if text.isdigit() else text.lower()
+    return [convert(c) for c in re.split(r'(\d+)', path.name)]
+
+
+def get_audio_files(directory: Path) -> list[Path]:
+    """Get all audio files from directory, sorted naturally"""
+    audio_files = []
+    for file in directory.iterdir():
+        if file.is_file() and file.suffix.lower() in AUDIO_EXTENSIONS:
+            audio_files.append(file)
+    
+    # Sort naturally (1, 2, 10 instead of 1, 10, 2)
+    audio_files.sort(key=natural_sort_key)
+    return audio_files
+
+
+def transcribe_single_file(model, audio_file: Path, language: str = None) -> tuple[str, dict]:
+    """Transcribe a single audio file using pre-loaded model.
+    Returns (transcription_text, info_dict)
+    """
+    temp_file = None
+    try:
+        converted_audio = convert_audio_to_wav(audio_file)
+        if converted_audio != audio_file:
+            temp_file = converted_audio
+
+        # Transcribe with faster-whisper
+        segments, info = model.transcribe(
+            str(converted_audio),
+            language=language,
+            task="transcribe",
+            beam_size=5,
+            vad_filter=True,
+            vad_parameters=dict(min_silence_duration_ms=500)
+        )
+
+        # Collect all segments
+        transcription_parts = []
+        for segment in segments:
+            transcription_parts.append(segment.text)
+
+        transcription = " ".join(transcription_parts).strip()
+        
+        info_dict = {
+            "language": info.language,
+            "probability": info.language_probability
+        }
+        
+        return transcription, info_dict
+
+    finally:
+        if temp_file and temp_file.exists():
+            try:
+                os.unlink(temp_file)
+            except Exception:
+                pass
+
+
+def transcribe_batch(input_dir: Path, output_file: Path, language: str = None, model_size: str = "large"):
+    """Transcribe all audio files in a directory (batch mode)"""
+    from rich.table import Table
+    from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, MofNCompleteColumn, TimeElapsedColumn
+    
+    print_header(model_size)
+    
+    # Check directory exists
+    if not input_dir.exists():
+        console.print(f"[bold red]✗[/bold red] Error: Directory not found: {input_dir}")
+        sys.exit(1)
+    
+    if not input_dir.is_dir():
+        console.print(f"[bold red]✗[/bold red] Error: Not a directory: {input_dir}")
+        sys.exit(1)
+    
+    # Get audio files
+    audio_files = get_audio_files(input_dir)
+    
+    if not audio_files:
+        console.print(f"[bold red]✗[/bold red] No audio files found in: {input_dir}")
+        console.print(f"[dim]Supported formats: {', '.join(sorted(AUDIO_EXTENSIONS))}[/dim]")
+        sys.exit(1)
+    
+    # Print batch mode header
+    console.print("\n[bold magenta]📦 BATCH MODE[/bold magenta]")
+    console.print(f"[dim]Directory: {input_dir}[/dim]")
+    console.print(f"[dim]Output: {output_file}[/dim]")
+    
+    # Calculate total duration
+    total_duration = 0.0
+    file_durations = []
+    for f in audio_files:
+        dur = get_audio_duration(f)
+        file_durations.append(dur)
+        total_duration += dur
+    
+    # Show files table
+    console.print(f"\n[bold cyan]Found {len(audio_files)} audio files:[/bold cyan]")
+    
+    table = Table(box=box.ROUNDED, border_style="dim")
+    table.add_column("#", style="dim", width=4)
+    table.add_column("File", style="cyan")
+    table.add_column("Duration", style="green", justify="right")
+    
+    for i, (f, dur) in enumerate(zip(audio_files, file_durations), 1):
+        dur_str = format_duration(dur) if dur > 0 else "?"
+        table.add_row(str(i), f.name, dur_str)
+    
+    console.print(table)
+    console.print(f"[dim]Total duration: {format_duration(total_duration)}[/dim]\n")
+    
+    # Determine device
+    try:
+        import torch
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        console.print(f"[dim]Device: {device}[/dim]")
+    except ImportError:
+        device = "cpu"
+        console.print(f"[dim]Device: {device}[/dim]")
+    
+    # Load model once
+    try:
+        model = load_model(device, model_size)
+    except Exception as e:
+        console.print(f"\n[bold red]✗[/bold red] Failed to load model: {str(e)}")
+        sys.exit(1)
+    
+    # Process files
+    console.print(f"\n[bold cyan]Processing files...[/bold cyan]")
+    
+    all_transcriptions = []
+    total_words = 0
+    total_chars = 0
+    
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(bar_width=30),
+        MofNCompleteColumn(),
+        TimeElapsedColumn(),
+        console=console,
+    ) as progress:
+        
+        main_task = progress.add_task(
+            "[cyan]Transcribing...",
+            total=len(audio_files)
+        )
+        
+        for i, audio_file in enumerate(audio_files, 1):
+            progress.update(main_task, description=f"[cyan]{audio_file.name}")
+            
+            try:
+                transcription, info = transcribe_single_file(model, audio_file, language)
+                
+                # Add separator between files
+                file_header = f"\n\n{'='*60}\n📄 {audio_file.name}\n{'='*60}\n\n"
+                all_transcriptions.append(file_header + transcription)
+                
+                word_count = len(transcription.split())
+                char_count = len(transcription)
+                total_words += word_count
+                total_chars += char_count
+                
+                console.print(f"  [green]✓[/green] {audio_file.name} ({word_count} words)")
+                
+            except Exception as e:
+                console.print(f"  [red]✗[/red] {audio_file.name}: {str(e)}")
+                all_transcriptions.append(f"\n\n{'='*60}\n📄 {audio_file.name}\n{'='*60}\n\n[ERROR: {str(e)}]")
+            
+            progress.advance(main_task)
+    
+    # Combine and save
+    console.print(f"\n[bold cyan]Saving combined transcription...[/bold cyan]")
+    
+    combined_text = "".join(all_transcriptions).strip()
+    output_file.write_text(combined_text, encoding='utf-8')
+    
+    console.print(f"[bold green]✓[/bold green] Saved to: {output_file}")
+    
+    # Final stats
+    console.print("\n[bold cyan]Summary:[/bold cyan]")
+    summary_table = Table(box=box.ROUNDED, border_style="green", show_header=False)
+    summary_table.add_column("Metric", style="dim")
+    summary_table.add_column("Value", style="bold")
+    summary_table.add_row("Files processed", str(len(audio_files)))
+    summary_table.add_row("Total duration", format_duration(total_duration))
+    summary_table.add_row("Total words", f"{total_words:,}")
+    summary_table.add_row("Total characters", f"{total_chars:,}")
+    console.print(summary_table)
+    
+    console.print("\n[bold green]Batch transcription completed successfully![/bold green]\n")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Transcribe audio files using Whisper",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  %(prog)s input.mp3 output.txt
-  %(prog)s audio.wav transcript.txt --language en
-  %(prog)s lecture.mp3 transcript.txt --language de --model large
-  %(prog)s podcast.m4a transcript.txt --model medium --language ru
+  Single file:
+    %(prog)s input.mp3 output.txt
+    %(prog)s audio.wav transcript.txt --language en
+    %(prog)s lecture.mp3 transcript.txt --language de --model large
+
+  Batch mode (directory input):
+    %(prog)s ./recordings/ combined_output.txt --language de
+    %(prog)s /path/to/lectures/ transcript.txt --model medium
 
 Available models:
-  large  - Best accuracy, ~3GB
-  distil - Distilled large-v3, ~1.5GB, 6x faster (English-optimized)
+  large  - Best accuracy, ~3GB (default)
+  turbo  - Large-v3-turbo, ~800MB, 8x faster, multilingual
   medium - Good balance, ~1.5GB, 2-3x faster than large
   small  - Fast, ~466MB, lower accuracy
   base   - Very fast, ~145MB, basic accuracy
+
+Batch mode:
+  When input is a directory, all audio files are processed in natural
+  sort order and combined into a single output file.
         """
     )
 
     parser.add_argument(
-        "input_file",
+        "input",
         type=Path,
-        help="Input audio file (mp3, wav, m4a, etc.)"
+        help="Input audio file or directory (for batch mode)"
     )
 
     parser.add_argument(
@@ -509,7 +722,7 @@ Available models:
     parser.add_argument(
         "--model",
         type=str,
-        choices=["large", "distil", "medium", "small", "base"],
+        choices=["large", "turbo", "medium", "small", "base"],
         default="large",
         help="Whisper model size (default: large)"
     )
@@ -524,7 +737,11 @@ Available models:
     args = parser.parse_args()
 
     try:
-        transcribe_audio(args.input_file, args.output_file, args.language, args.model)
+        # Check if input is directory (batch mode) or single file
+        if args.input.is_dir():
+            transcribe_batch(args.input, args.output_file, args.language, args.model)
+        else:
+            transcribe_audio(args.input, args.output_file, args.language, args.model)
     except KeyboardInterrupt:
         console.print("\n\n[yellow]! Operation cancelled by user[/yellow]")
         console.print("[dim]Exiting gracefully...[/dim]\n")
