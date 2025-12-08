@@ -167,17 +167,17 @@ When you provide a directory instead of a file, all audio files are processed in
 
 **Process all recordings in a folder:**
 ```bash
-python whisp.py ./lectures/ combined_transcript.txt --language de --model medium
+python whisp.py ./lectures/ combined_transcript.txt --language de --model turbo
 ```
 
 **Batch mode features:**
-- 📋 Shows table of all files with durations before processing
+- 📋 **Live table** with real-time status updates for each file
+- ⏱️ **Elapsed timer** shows processing time for current file
 - 🔢 Natural sorting (NeueAufnahme1, NeueAufnahme2, ..., NeueAufnahme10)
-- 📊 Progress bar with file counter
 - 📝 Combined output with file separators
-- 📈 Summary statistics at the end
+- 📈 Summary with **speed metric** (e.g., "1.9x realtime")
 
-**Supported formats in batch mode:**
+**Supported formats:**
 `.mp3`, `.wav`, `.m4a`, `.flac`, `.ogg`, `.wma`, `.aac`, `.opus`
 
 ### Command help
@@ -206,9 +206,6 @@ Loading model with compute type 'int8'...
 ✓ Model loaded successfully on cpu
 Compute type: int8
 
-Converting .m4a to WAV format...
-✓ Audio converted successfully
-
 Transcribing audio file...
 Input: lecture.m4a
 Duration: 08:03
@@ -228,6 +225,40 @@ Preview:
 Stats: 1247 words, 7856 characters
 
 Transcription completed successfully!
+```
+
+### Batch Mode Output Example
+
+```
+📦 BATCH MODE
+Directory: ./lectures/
+Output: transcript.txt
+
+Found 5 audio files:
+Total duration: 42:15
+
+Processing...
+╭──────┬──────────────────────┬──────────┬──────────────────╮
+│    # │ File                 │ Duration │ Status           │
+├──────┼──────────────────────┼──────────┼──────────────────┤
+│    1 │ Neue Aufnahme 01.m4a │    08:03 │ ✓ 1247 words     │
+│    2 │ Neue Aufnahme 02.m4a │    08:10 │ ✓ 1156 words     │
+│    3 │ Neue Aufnahme 03.m4a │    07:08 │ ⏹ 3:42           │
+│    4 │ Neue Aufnahme 04.m4a │    08:31 │                  │
+│    5 │ Neue Aufnahme 05.m4a │    10:23 │                  │
+╰──────┴──────────────────────┴──────────┴──────────────────╯
+
+Summary:
+╭──────────────────┬───────────────╮
+│ Files processed  │ 5             │
+│ Total duration   │ 42:15         │
+│ Processing time  │ 22:30         │
+│ Speed            │ 1.9x realtime │
+│ Total words      │ 6,543         │
+│ Total characters │ 41,234        │
+╰──────────────────┴───────────────╯
+
+Batch transcription completed successfully!
 ```
 
 ## ⚡ Performance
