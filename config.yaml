@@ -80,13 +80,20 @@ recording:
 
   # Default recording device index (-1 = system default)
   # Available devices are shown when you run 'python whisp.py record output.txt'
-  default_device: 4
+  default_device: -1
 
   # Show audio level meter during recording (requires more CPU)
   show_level_meter: true
 
-  # Temporary recording file location (empty = system temp directory)
-  temp_dir: ""
+  # Directory to save recordings (only used when keep_recording is true)
+  # Empty = system temp directory (recordings will be deleted after transcription)
+  # Path = save recordings with timestamp to this directory
+  save_dir: "/Users/andrey.fedyukov/projects/whisp/output"
 
-  # Keep recording file after transcription (useful for debugging)
-  keep_recording: false
+  # Keep recording file after transcription
+  # true = save with timestamp in save_dir, false = delete after transcription
+  keep_recording: true
+
+  # Compress recording to save space ("m4a" or "wav")
+  # m4a is ~10x smaller than wav with minimal quality loss
+  compress_format: "m4a"

@@ -76,8 +76,9 @@ DEFAULT_CONFIG = {
         "channels": 1,
         "default_device": -1,
         "show_level_meter": True,
-        "temp_dir": "",
-        "keep_recording": False
+        "save_dir": "",
+        "keep_recording": False,
+        "compress_format": "m4a"
     }
 }
 
@@ -226,6 +227,76 @@ def convert_audio_to_wav(audio_file: Path, quiet: bool = False) -> Path:
         raise
     except Exception as e:
         console.print(f"[bold red]✗[/bold red] Audio conversion failed: {str(e)}")
+        raise
+
+
+def compress_audio_to_m4a(wav_file: Path, output_path: Path = None, quiet: bool = False) -> Path:
+    """Compress WAV audio to M4A format using ffmpeg.
+
+    M4A with AAC codec provides ~10x size reduction compared to WAV
+    with minimal quality loss for speech.
+
+    Args:
+        wav_file: Path to input WAV file
+        output_path: Optional output path for M4A file. If None, creates temp file.
+        quiet: If True, suppress output messages
+
+    Returns:
+        Path to compressed M4A file
+    """
+    # Check if ffmpeg is available
+    if not shutil.which('ffmpeg'):
+        console.print("[bold red]✗[/bold red] ffmpeg not found in PATH")
+        console.print("[yellow]Please install ffmpeg to compress audio files[/yellow]")
+        console.print("[dim]macOS: brew install ffmpeg[/dim]")
+        sys.exit(1)
+
+    if not quiet:
+        console.print(f"\n[cyan]Compressing to M4A format...[/cyan]")
+
+    try:
+        # Use provided output path or create temporary M4A file
+        if output_path:
+            temp_m4a_path = output_path
+        else:
+            temp_m4a = tempfile.NamedTemporaryFile(suffix='.m4a', delete=False)
+            temp_m4a_path = Path(temp_m4a.name)
+            temp_m4a.close()
+
+        # Compress using ffmpeg with AAC codec
+        # -i: input file
+        # -c:a aac: use AAC audio codec
+        # -b:a 64k: bitrate 64kbps (good for speech, very small files)
+        # -y: overwrite output file
+        result = subprocess.run(
+            [
+                'ffmpeg',
+                '-i', str(wav_file),
+                '-c:a', 'aac',
+                '-b:a', '64k',
+                '-y',
+                str(temp_m4a_path)
+            ],
+            capture_output=True,
+            text=True
+        )
+
+        if result.returncode != 0:
+            console.print(f"[bold red]✗[/bold red] FFmpeg compression failed")
+            console.print(f"[dim]{result.stderr}[/dim]")
+            raise RuntimeError(f"FFmpeg failed with code {result.returncode}")
+
+        if not quiet:
+            # Show size comparison
+            wav_size = wav_file.stat().st_size
+            m4a_size = temp_m4a_path.stat().st_size
+            ratio = (wav_size / m4a_size) if m4a_size > 0 else 1
+            console.print(f"[green]✓[/green] Compressed: {wav_size / (1024*1024):.1f}MB → {m4a_size / (1024*1024):.1f}MB ({ratio:.1f}x smaller)")
+
+        return temp_m4a_path
+
+    except Exception as e:
+        console.print(f"[bold red]✗[/bold red] Audio compression failed: {str(e)}")
         raise
 
 
@@ -667,6 +738,39 @@ def select_audio_device(devices: list[dict]) -> int:
         return -1
 
 
+def get_recording_file_path(suffix: str = '.wav') -> Path:
+    """Generate path for recording file based on config.
+
+    If save_dir is configured and keep_recording is True, creates a timestamped
+    file in save_dir. Otherwise, creates a temporary file.
+
+    Args:
+        suffix: File extension (e.g., '.wav', '.m4a')
+
+    Returns:
+        Path object for the recording file
+    """
+    config = CONFIG["recording"]
+    save_dir = config.get("save_dir", "")
+    keep_recording = config.get("keep_recording", False)
+
+    if save_dir and keep_recording:
+        # Create permanent file with timestamp
+        save_path = Path(save_dir)
+        save_path.mkdir(parents=True, exist_ok=True)
+
+        from datetime import datetime
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"recording_{timestamp}{suffix}"
+        return save_path / filename
+    else:
+        # Create temporary file
+        temp_file = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
+        temp_path = Path(temp_file.name)
+        temp_file.close()
+        return temp_path
+
+
 def record_audio_fixed_duration(device_index: int, duration: float) -> Path:
     """Record audio for a fixed duration with progress bar.
 
@@ -675,7 +779,7 @@ def record_audio_fixed_duration(device_index: int, duration: float) -> Path:
         duration: Recording duration in seconds
 
     Returns:
-        Path to temporary WAV file containing the recording
+        Path to temporary audio file (WAV or M4A depending on config)
 
     Raises:
         SystemExit: If recording fails
@@ -687,14 +791,8 @@ def record_audio_fixed_duration(device_index: int, duration: float) -> Path:
     sample_rate = config["sample_rate"]
     channels = config["channels"]
 
-    # Create temp WAV file
-    temp_file = tempfile.NamedTemporaryFile(
-        suffix='.wav',
-        delete=False,
-        dir=config["temp_dir"] or None
-    )
-    temp_path = Path(temp_file.name)
-    temp_file.close()
+    # Create WAV file (temp or permanent based on config)
+    temp_path = get_recording_file_path('.wav')
 
     console.print(f"\n[cyan]Recording for {duration:.0f} seconds...[/cyan]")
 
@@ -734,7 +832,21 @@ def record_audio_fixed_duration(device_index: int, duration: float) -> Path:
         sf.write(temp_path, recording, sample_rate)
         console.print("[green]✓[/green] Recording complete")
 
-        return temp_path
+        # Compress to M4A if configured
+        compress_format = config.get("compress_format", "wav").lower()
+        if compress_format == "m4a":
+            try:
+                # Generate M4A path (replace .wav with .m4a)
+                m4a_path = temp_path.with_suffix('.m4a')
+                compress_audio_to_m4a(temp_path, output_path=m4a_path, quiet=False)
+                # Delete the WAV file after successful compression
+                temp_path.unlink()
+                return m4a_path
+            except Exception as e:
+                console.print(f"[yellow]Warning: Compression failed, using WAV: {e}[/yellow]")
+                return temp_path
+        else:
+            return temp_path
 
     except KeyboardInterrupt:
         console.print("\n[yellow]! Recording cancelled[/yellow]")
@@ -749,13 +861,13 @@ def record_audio_fixed_duration(device_index: int, duration: float) -> Path:
 
 
 def record_audio_interactive(device_index: int) -> Path:
-    """Record audio with manual start/stop control (Enter key).
+    """Record audio with manual start/stop control (Ctrl+D).
 
     Args:
         device_index: Device index from select_audio_device(), or -1 for default
 
     Returns:
-        Path to temporary WAV file containing the recording
+        Path to temporary audio file (WAV or M4A depending on config)
 
     Raises:
         SystemExit: If recording fails or is cancelled
@@ -769,10 +881,8 @@ def record_audio_interactive(device_index: int) -> Path:
     sample_rate = config["sample_rate"]
     channels = config["channels"]
 
-    # Create temp file
-    temp_file = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
-    temp_path = Path(temp_file.name)
-    temp_file.close()
+    # Create WAV file (temp or permanent based on config)
+    temp_path = get_recording_file_path('.wav')
 
     console.print("\n[dim]Press ENTER to start recording...[/dim]")
     input()
@@ -881,7 +991,21 @@ def record_audio_interactive(device_index: int) -> Path:
         full_recording = np.concatenate(recording_data, axis=0)
         sf.write(temp_path, full_recording, sample_rate)
 
-        return temp_path
+        # Compress to M4A if configured
+        compress_format = config.get("compress_format", "wav").lower()
+        if compress_format == "m4a":
+            try:
+                # Generate M4A path (replace .wav with .m4a)
+                m4a_path = temp_path.with_suffix('.m4a')
+                compress_audio_to_m4a(temp_path, output_path=m4a_path, quiet=False)
+                # Delete the WAV file after successful compression
+                temp_path.unlink()
+                return m4a_path
+            except Exception as e:
+                console.print(f"[yellow]Warning: Compression failed, using WAV: {e}[/yellow]")
+                return temp_path
+        else:
+            return temp_path
 
     except KeyboardInterrupt:
         console.print("\n[yellow]! Recording cancelled[/yellow]")
