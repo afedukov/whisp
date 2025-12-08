@@ -1,22 +1,48 @@
 # 🎙️ Whisper
 
-Command-line application for transcribing audio files using [OpenAI Whisper Large-v3](https://huggingface.co/openai/whisper-large-v3) model (and others).
+Fast and accurate audio transcription CLI powered by [OpenAI Whisper Large-v3](https://huggingface.co/openai/whisper-large-v3) and [faster-whisper](https://github.com/SYSTRAN/faster-whisper).
 
-Powered by [faster-whisper](https://github.com/SYSTRAN/faster-whisper) for **4-8x faster** transcription compared to standard implementations.
+**Features:**
+- 🎯 Transcribe audio files with high accuracy
+- 🎙️ Record from microphone and transcribe in one command
+- 🗂️ Batch process entire folders
+- ⚡ **4-8x faster** than standard Whisper implementations
+- 📁 Auto-generated output files (optional)
+- 🌍 99+ languages supported with auto-detection
 
-## ✨ Features
+## 🚀 Quick Start
+
+```bash
+# Transcribe a single file
+python whisp.py audio.mp3                # → audio.txt
+
+# Record and transcribe
+python whisp.py record                   # → output/recording_TIMESTAMP.txt
+
+# Batch process folder
+python whisp.py ./recordings/            # → recordings.txt
+
+# With specific model and language
+python whisp.py audio.mp3 --model large --language de
+```
+
+## ✨ Full Feature List
 
 - 🎯 High accuracy transcription with Whisper Large-v3
 - ⚡ **4-8x faster** than standard Whisper (using CTranslate2)
 - 🚀 GPU (CUDA) support for accelerated processing
 - 💾 Lower memory usage with int8 quantization on CPU
 - 🌍 Automatic language detection or manual language specification
-- 📊 Beautiful progress indicators with Rich
+- 📊 Beautiful progress indicators and live status tables with animated spinners
 - 📝 Preview of transcription results
 - 🔄 Multiple model options (large, large-v2, turbo, medium, small, base)
 - 🎤 Voice activity detection (VAD) to skip silence
 - 📥 Resumable model downloads with progress bar
-- 🎙️ **Microphone recording mode** - record and transcribe in one command
+- 🎙️ **Microphone recording mode** - record and transcribe with live audio level meter
+- 🗂️ **Batch mode** - process entire folders with live progress tracking
+- 📁 **Auto-generated filenames** - optional output file paths for convenience
+- 💾 **M4A compression** - save recordings 10x smaller with minimal quality loss
+- 🎚️ **Audio level meter** - real-time recording level visualization
 
 ## 🎵 Supported Audio Formats
 
@@ -116,16 +142,30 @@ This will install:
 
 ## 💻 Usage
 
-### Basic usage
+### Single File Transcription
 
+**Basic usage:**
 ```bash
 python whisp.py input.mp3 output.txt
+python whisp.py input.mp3                    # Auto-generates input.txt
 ```
 
-### With model and language specification
-
+**With model and language specification:**
 ```bash
 python whisp.py audio.wav transcript.txt --model large --language en
+python whisp.py audio.wav --model turbo      # Auto-generates audio.txt
+```
+
+**Example commands:**
+```bash
+# German lecture with maximum accuracy
+python whisp.py lecture.mp3 --model large --language de
+
+# Fast podcast transcription
+python whisp.py podcast.m4a --model turbo --language en
+
+# Auto-detect language with medium model
+python whisp.py interview.mp3 --model medium
 ```
 
 ### Model Selection
@@ -141,33 +181,6 @@ python whisp.py audio.wav transcript.txt --model large --language en
 | **small** | ~466MB | Basic | Fast | 🚀 For simple tasks |
 | **base** | ~145MB | Basic | Very fast | 🏃 Minimal accuracy |
 
-### Examples
-
-**German lecture (maximum accuracy with latest model):**
-```bash
-python whisp.py lecture.mp3 transcript.txt --model large --language de
-```
-
-**German lecture (maximum accuracy with large-v2):**
-```bash
-python whisp.py lecture.mp3 transcript.txt --model large-v2 --language de
-```
-
-**Fast podcast transcription:**
-```bash
-python whisp.py podcast.m4a transcript.txt --model turbo --language de
-```
-
-**Good balance for any language:**
-```bash
-python whisp.py interview.mp3 interview_text.txt --model medium
-```
-
-**Quick test with basic accuracy:**
-```bash
-python whisp.py test.mp3 test.txt --model base
-```
-
 ### Recording Mode (Microphone Input)
 
 Record audio from your microphone and transcribe it automatically.
@@ -175,21 +188,23 @@ Record audio from your microphone and transcribe it automatically.
 **Basic recording:**
 ```bash
 python whisp.py record output.txt
+python whisp.py record                          # Auto-saves to save_dir/recording_TIMESTAMP.txt
 ```
 
 **Recording with specific model and language:**
 ```bash
 python whisp.py record transcript.txt --model turbo --language de
+python whisp.py record --model turbo --language de  # Auto-generates filename
 ```
 
 **How it works:**
-1. Shows list of available microphones
-2. You select a device (or press Enter for default)
+1. Shows list of available microphones (or uses `default_device` from config)
+2. You select a device with arrow keys ↑↓ and Enter
 3. Press Enter to start recording
-4. Press Enter again to stop recording
+4. Press **Ctrl+D** to stop recording (prevents accidental stops)
 5. Audio is automatically transcribed using selected model
-6. Transcription saved to output file
-7. Temporary recording deleted (configurable in config.yaml)
+6. Both audio and transcription saved to `save_dir` with matching timestamps
+7. Files named like: `recording_20251208_195410.m4a` and `recording_20251208_195410.txt`
 
 **Permissions on macOS:**
 - First run will ask for microphone permission
@@ -198,134 +213,80 @@ python whisp.py record transcript.txt --model turbo --language de
 **Configuration options** (in config.yaml):
 - `sample_rate`: Recording quality (default: 16000 Hz, optimal for Whisper)
 - `channels`: Mono/stereo (default: 1 - mono recommended for speech)
+- `default_device`: Pre-select recording device by name or index
+  - `-1` = system default (interactive selection)
+  - `"BlackHole 2ch"` = exact device name
+  - `"BlackHole"` = partial name match (useful when index changes)
+  - `4` = device index (less reliable, changes when devices are plugged/unplugged)
+- `save_dir`: Directory to save recordings (when `keep_recording: true`)
 - `keep_recording`: Keep audio file after transcription (default: false)
+- `compress_format`: Save recordings as `"m4a"` (10x smaller) or `"wav"` (default: m4a)
+- `show_level_meter`: Show audio level meter during recording (default: true)
 
 ### Batch Mode (Directory Input)
 
-When you provide a directory instead of a file, all audio files are processed in **natural sort order** (1, 2, 10 instead of 1, 10, 2) and combined into a single output file.
+Process entire folders of audio files. All files are processed in **natural sort order** (1, 2, 10 instead of 1, 10, 2) and combined into a single output file.
 
-**Process all recordings in a folder:**
+**Basic batch processing:**
 ```bash
 python whisp.py ./lectures/ combined_transcript.txt --language de --model turbo
+python whisp.py ./recordings/                    # Auto-generates recordings.txt
 ```
 
 **Batch mode features:**
 - 📋 **Live table** with real-time status updates for each file
-- ⏱️ **Elapsed timer** shows processing time for current file
-- 🔢 Natural sorting (NeueAufnahme1, NeueAufnahme2, ..., NeueAufnahme10)
-- 📝 Combined output with file separators
-- 📈 Summary with **speed metric** (e.g., "1.9x realtime")
+- 🔄 **Animated spinners** show processing progress for current file
+- ⏱️ **Elapsed timer** for each file
+- 🔢 **Natural sorting** (file1, file2, file10 instead of file1, file10, file2)
+- 📝 Combined output in a single text file
+- 📈 Summary with speed metrics and statistics
 
 **Supported formats:**
 `.mp3`, `.wav`, `.m4a`, `.flac`, `.ogg`, `.wma`, `.aac`, `.opus`
 
-### Command help
+### Command Help
 
 ```bash
 python whisp.py --help
 ```
 
-## 📊 Example Output
+## ⚙️ Configuration
 
-```
-╭─────────────────────────────────────────╮
-│ Whisper                                 │
-│ Powered by OpenAI large-v3              │
-╰─────────────────────────────────────────╯
+The application can be configured via `config.yaml` file. All settings have sensible defaults.
 
-Device: cpu
+### Transcription Settings
+- `default_language`: Auto-detect if empty, or specify (e.g., "en", "de", "ru")
+- `beam_size`: Search beam size (default: 5) - higher = more accurate but slower
+- `vad_filter`: Voice activity detection to skip silence (default: true)
+- `min_silence_duration_ms`: Minimum silence duration for VAD (default: 500ms)
 
-Initializing Whisper model...
-Model: medium (Good balance, ~1.5GB)
-Using faster-whisper for optimized performance
-Downloading model 'Systran/faster-whisper-medium'...
-Downloading model... ████████████████████████████████████████ 100% • 1.5/1.5 GB • 5.2 MB/s • 00:00:00
-✓ Model downloaded successfully
-Loading model with compute type 'int8'...
-✓ Model loaded successfully on cpu
-Compute type: int8
+### Recording Settings
+- `sample_rate`: Recording quality (default: 16000 Hz)
+- `channels`: Audio channels (default: 1 - mono)
+- `default_device`: Pre-select microphone by name or show menu with `-1`
+- `save_dir`: Directory for saved recordings
+- `keep_recording`: Keep audio file after transcription (default: false)
+- `compress_format`: `"m4a"` (10x smaller) or `"wav"` (default: m4a)
+- `show_level_meter`: Show real-time audio level (default: true)
 
-Transcribing audio file...
-Input: lecture.m4a
-Duration: 08:03
+### Model Settings
+- `default`: Model to use if not specified (default: "turbo")
+- `compute_type_cpu`: Quantization for CPU (default: "int8")
+- `compute_type_gpu`: Precision for GPU (default: "float16")
 
-⠹ Processing 08:03 of audio... 0:02:15
-Detected language: de (confidence: 99.8%)
+### Output Settings
+- `preview_length`: Characters to show in preview (default: 200)
 
-Saving transcription...
-✓ Transcription saved to: transcript.txt
+## 🎯 Model Selection Guide
 
-Preview:
-╭─────────────────────────────────────────╮
-│ Willkommen zu dieser Vorlesung über    │
-│ kognitive Psychologie. Heute werden... │
-╰─────────────────────────────────────────╯
+### Recommended Models
 
-Stats: 1247 words, 7856 characters
-
-Transcription completed successfully!
-```
-
-### Batch Mode Output Example
-
-```
-📦 BATCH MODE
-Directory: ./lectures/
-Output: transcript.txt
-
-Found 5 audio files:
-Total duration: 42:15
-
-Processing...
-╭──────┬──────────────────────┬──────────┬──────────────────╮
-│    # │ File                 │ Duration │ Status           │
-├──────┼──────────────────────┼──────────┼──────────────────┤
-│    1 │ Neue Aufnahme 01.m4a │    08:03 │ ✓ 1247 words     │
-│    2 │ Neue Aufnahme 02.m4a │    08:10 │ ✓ 1156 words     │
-│    3 │ Neue Aufnahme 03.m4a │    07:08 │ ⏹ 3:42           │
-│    4 │ Neue Aufnahme 04.m4a │    08:31 │                  │
-│    5 │ Neue Aufnahme 05.m4a │    10:23 │                  │
-╰──────┴──────────────────────┴──────────┴──────────────────╯
-
-Summary:
-╭──────────────────┬───────────────╮
-│ Files processed  │ 5             │
-│ Total duration   │ 42:15         │
-│ Processing time  │ 22:30         │
-│ Speed            │ 1.9x realtime │
-│ Total words      │ 6,543         │
-│ Total characters │ 41,234        │
-╰──────────────────┴───────────────╯
-
-Batch transcription completed successfully!
-```
-
-## ⚡ Performance
-
-Thanks to `faster-whisper` with CTranslate2 and int8 quantization:
-
-| Setup | Speed | Example (8 min audio) |
-|-------|-------|----------------------|
-| **CPU (int8)** | ~0.5-1x real-time | **2-4 minutes** ⚡ |
-| **GPU (CUDA)** | ~10-20x real-time | **30-60 seconds** 🚀 |
-
-**Comparison:**
-- Standard Whisper (transformers): 16-40 minutes for 8min audio on CPU
-- **faster-whisper (this tool): 2-4 minutes** for same audio ✅
-- **4-8x faster** than standard implementation!
-
-> 💡 **Tip:** Even on CPU, faster-whisper provides excellent performance thanks to int8 quantization and optimized inference.
-
-## 🔧 Additional Settings
-
-### Model Selection Recommendations
-
-- **large** - latest v3 model, use for academic lectures, medical recordings, technical documentation (any language)
-- **large-v2** - previous large version, slightly faster than v3, similar accuracy
-- **turbo** - optimal for fast transcription with good accuracy (any language)
-- **medium** - good balance for any language on moderate hardware
-- **small** - for simple recordings with good audio quality
-- **base** - quick tests or very simple content
+- **turbo** - ✅ Best for most use cases: fast (8x) with good accuracy
+- **large** - 🎓 Maximum accuracy for academic/technical content (latest v3)
+- **large-v2** - 🔄 Previous version, slightly faster than v3
+- **medium** - ⚖️ Good balance for any language
+- **small** - 🚀 Fast transcription with acceptable quality
+- **base** - 🏃 Quick tests only
 
 ### Supported Languages
 
@@ -393,12 +354,16 @@ python --version  # Should show 3.11.x, 3.12.x, or 3.13.x
 
 ### Slow performance
 
-- faster-whisper with int8 quantization on CPU should process 8min audio in ~2-4 minutes
-- If it's much slower, check that `faster-whisper` is actually installed:
+If transcription is slower than expected:
 
+1. Check that `faster-whisper` is properly installed:
 ```bash
 python -c "from faster_whisper import WhisperModel; print('OK')"
 ```
+
+2. Verify you're using CPU int8 quantization (check console output)
+3. Try a smaller model (turbo or medium) for faster processing
+4. Ensure VAD filter is enabled in config.yaml (skips silence)
 
 ### GPU not detected
 
@@ -417,9 +382,11 @@ If your model download was interrupted, simply run the script again. Downloads a
 ```
 whisp/
 ├── whisp.py                # Main script
-├── requirements.txt         # Python dependencies
-├── README.md               # Documentation
-└── venv/                   # Virtual environment (created during installation)
+├── requirements.txt        # Python dependencies
+├── config.yaml            # Configuration file (optional)
+├── README.md              # Documentation
+├── output/                # Default directory for recordings (auto-created)
+└── venv/                  # Virtual environment (created during installation)
 ```
 
 ## 📄 License

@@ -78,8 +78,13 @@ recording:
   # Audio channels (1=mono, 2=stereo) - mono recommended for speech
   channels: 1
 
-  # Default recording device index (-1 = system default)
-  # Available devices are shown when you run 'python whisp.py record output.txt'
+  # Default recording device (pre-select microphone or show interactive menu)
+  # Options:
+  #   -1                      → Show interactive device selection menu
+  #   "BlackHole 2ch"         → Auto-use device by exact name (recommended!)
+  #   "BlackHole"             → Auto-use device by partial name match
+  #   4                       → Auto-use device by index (unreliable, may change!)
+  # To see available devices, run: python whisp.py record
   default_device: -1
 
   # Show audio level meter during recording (requires more CPU)

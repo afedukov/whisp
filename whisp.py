@@ -1140,32 +1140,64 @@ def record_and_transcribe(
 
     # Step 1: List and select device (or use from config)
     config_device = CONFIG["recording"].get("default_device", -1)
+    devices = list_audio_devices()
+    device_index = -1
 
-    if config_device != -1:
-        # Use device from config without asking
-        device_index = config_device
-        devices = list_audio_devices()
+    # Check if device is specified in config
+    if config_device != -1 and config_device is not None:
+        if isinstance(config_device, str):
+            # Device specified by name - search for it
+            search_name = config_device.lower()
+            matching_device = None
 
-        # Show which device is being used
-        device_name = next((d['name'] for d in devices if d['index'] == device_index), None)
-        if device_name:
-            if len(device_name) > 50:
-                device_name = device_name[:47] + "..."
-            console.print(f"\n[dim]Using microphone: [green]{device_name}[/green] (from config)[/dim]")
-        else:
-            console.print(f"\n[yellow]Warning: Device index {device_index} from config not found[/yellow]")
-            console.print("[dim]Falling back to device selection...[/dim]")
-            device_index = select_audio_device(devices)
+            # Try exact match first
+            for d in devices:
+                if d['name'].lower() == search_name:
+                    matching_device = d
+                    break
+
+            # If no exact match, try partial match
+            if not matching_device:
+                for d in devices:
+                    if search_name in d['name'].lower():
+                        matching_device = d
+                        break
+
+            if matching_device:
+                device_index = matching_device['index']
+                device_name = matching_device['name']
+                if len(device_name) > 50:
+                    device_name = device_name[:47] + "..."
+                console.print(f"\n[dim]Using microphone: [green]{device_name}[/green] (from config)[/dim]")
+            else:
+                console.print(f"\n[yellow]Warning: Device '{config_device}' from config not found[/yellow]")
+                console.print("[dim]Available devices:[/dim]")
+                for d in devices:
+                    console.print(f"[dim]  - {d['name']}[/dim]")
+                console.print("[dim]Falling back to device selection...[/dim]")
+                device_index = select_audio_device(devices)
+
+        elif isinstance(config_device, int):
+            # Device specified by index (legacy support)
+            device_index = config_device
+            device_name = next((d['name'] for d in devices if d['index'] == device_index), None)
+
+            if device_name:
+                if len(device_name) > 50:
+                    device_name = device_name[:47] + "..."
+                console.print(f"\n[dim]Using microphone: [green]{device_name}[/green] (from config)[/dim]")
+            else:
+                console.print(f"\n[yellow]Warning: Device index {device_index} from config not found[/yellow]")
+                console.print("[dim]Falling back to device selection...[/dim]")
+                device_index = select_audio_device(devices)
     else:
-        # Interactive device selection
-        devices = list_audio_devices()
+        # No device specified in config - interactive selection
         device_index = select_audio_device(devices)
 
         if device_index == -1:
             console.print("[dim]Using system default microphone[/dim]")
         else:
             device_name = next((d['name'] for d in devices if d['index'] == device_index), "Unknown")
-            # Truncate long names
             if len(device_name) > 50:
                 device_name = device_name[:47] + "..."
             console.print(f"[dim]Selected: [green]{device_name}[/green][/dim]")
