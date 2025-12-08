@@ -729,8 +729,8 @@ Examples:
     %(prog)s /path/to/lectures/ transcript.txt --model medium
 
 Available models:
-  large  - Best accuracy, ~3GB (default)
-  turbo  - Large-v3-turbo, ~800MB, 8x faster, multilingual
+  turbo  - Large-v3-turbo, ~800MB, 8x faster, multilingual (default)
+  large  - Best accuracy, ~3GB
   medium - Good balance, ~1.5GB, 2-3x faster than large
   small  - Fast, ~466MB, lower accuracy
   base   - Very fast, ~145MB, basic accuracy
@@ -757,8 +757,8 @@ Batch mode:
         "--model",
         type=str,
         choices=["large", "turbo", "medium", "small", "base"],
-        default="large",
-        help="Whisper model size (default: large)"
+        default="turbo",
+        help="Whisper model size (default: turbo)"
     )
 
     parser.add_argument(

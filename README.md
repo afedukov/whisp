@@ -133,8 +133,8 @@ python whisp.py audio.wav transcript.txt --model large --language en
 
 | Model | Size | Accuracy | Speed | Recommendation |
 |-------|------|----------|-------|----------------|
-| **large** | ~3GB | Best | Slow | ✅ Default, for academic content |
-| **turbo** | ~800MB | Good | 8x faster | ⚡ Fast multilingual |
+| **turbo** | ~800MB | Good | 8x faster | ✅ Default, fast multilingual |
+| **large** | ~3GB | Best | Slow | 🎓 For academic content |
 | **medium** | ~1.5GB | Good | 2-3x faster | ⚖️ Balance of speed and quality |
 | **small** | ~466MB | Basic | Fast | 🚀 For simple tasks |
 | **base** | ~145MB | Basic | Very fast | 🏃 Minimal accuracy |
