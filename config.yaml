@@ -67,3 +67,26 @@ output:
   # Preview length in characters shown after transcription
   # Set to 0 to disable preview
   preview_length: 500
+
+# =============================================================================
+# Recording Settings (for microphone recording mode)
+# =============================================================================
+recording:
+  # Sample rate for recording (16kHz optimal for Whisper)
+  sample_rate: 16000
+
+  # Audio channels (1=mono, 2=stereo) - mono recommended for speech
+  channels: 1
+
+  # Default recording device index (-1 = system default)
+  # Available devices are shown when you run 'python whisp.py record output.txt'
+  default_device: 4
+
+  # Show audio level meter during recording (requires more CPU)
+  show_level_meter: true
+
+  # Temporary recording file location (empty = system temp directory)
+  temp_dir: ""
+
+  # Keep recording file after transcription (useful for debugging)
+  keep_recording: false

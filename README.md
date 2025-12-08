@@ -13,9 +13,10 @@ Powered by [faster-whisper](https://github.com/SYSTRAN/faster-whisper) for **4-8
 - 🌍 Automatic language detection or manual language specification
 - 📊 Beautiful progress indicators with Rich
 - 📝 Preview of transcription results
-- 🔄 Multiple model options (large, turbo, medium, small, base)
+- 🔄 Multiple model options (large, large-v2, turbo, medium, small, base)
 - 🎤 Voice activity detection (VAD) to skip silence
 - 📥 Resumable model downloads with progress bar
+- 🎙️ **Microphone recording mode** - record and transcribe in one command
 
 ## 🎵 Supported Audio Formats
 
@@ -166,6 +167,38 @@ python whisp.py interview.mp3 interview_text.txt --model medium
 ```bash
 python whisp.py test.mp3 test.txt --model base
 ```
+
+### Recording Mode (Microphone Input)
+
+Record audio from your microphone and transcribe it automatically.
+
+**Basic recording:**
+```bash
+python whisp.py record output.txt
+```
+
+**Recording with specific model and language:**
+```bash
+python whisp.py record transcript.txt --model turbo --language de
+```
+
+**How it works:**
+1. Shows list of available microphones
+2. You select a device (or press Enter for default)
+3. Press Enter to start recording
+4. Press Enter again to stop recording
+5. Audio is automatically transcribed using selected model
+6. Transcription saved to output file
+7. Temporary recording deleted (configurable in config.yaml)
+
+**Permissions on macOS:**
+- First run will ask for microphone permission
+- If denied: System Settings → Privacy & Security → Microphone → Terminal
+
+**Configuration options** (in config.yaml):
+- `sample_rate`: Recording quality (default: 16000 Hz, optimal for Whisper)
+- `channels`: Mono/stereo (default: 1 - mono recommended for speech)
+- `keep_recording`: Keep audio file after transcription (default: false)
 
 ### Batch Mode (Directory Input)
 

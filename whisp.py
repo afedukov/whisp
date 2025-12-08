@@ -70,6 +70,14 @@ DEFAULT_CONFIG = {
     },
     "output": {
         "preview_length": 200
+    },
+    "recording": {
+        "sample_rate": 16000,
+        "channels": 1,
+        "default_device": -1,
+        "show_level_meter": True,
+        "temp_dir": "",
+        "keep_recording": False
     }
 }
 
@@ -529,6 +537,456 @@ def transcribe_audio(audio_file: Path, output_file: Path, language: str = None, 
 
 
 # =============================================================================
+# Recording Mode Functions
+# =============================================================================
+
+def list_audio_devices() -> list[dict]:
+    """List available audio input devices.
+
+    Returns:
+        List of dicts with keys: index, name, channels, sample_rate
+
+    Raises:
+        SystemExit: If no devices found or permission denied
+    """
+    try:
+        import sounddevice as sd
+        devices = sd.query_devices()
+    except Exception as e:
+        # macOS permission error or sounddevice not installed
+        error_str = str(e).lower()
+        if "permission" in error_str or "access" in error_str:
+            console.print("[bold red]✗[/bold red] Cannot access audio devices")
+            console.print("\n[yellow]macOS: Grant microphone permission[/yellow]")
+            console.print("[dim]System Settings → Privacy & Security → Microphone → Terminal[/dim]")
+            console.print("[dim]Then restart this script[/dim]\n")
+        else:
+            console.print(f"[bold red]✗[/bold red] Audio device error: {e}")
+            console.print("[yellow]Make sure sounddevice is installed: pip install sounddevice[/yellow]")
+        sys.exit(1)
+
+    # Filter to input devices only
+    input_devices = []
+    for idx, d in enumerate(devices):
+        if d['max_input_channels'] > 0:
+            input_devices.append({
+                'index': idx,
+                'name': d['name'],
+                'channels': d['max_input_channels'],
+                'sample_rate': d['default_samplerate']
+            })
+
+    if not input_devices:
+        console.print("[bold red]✗[/bold red] No microphones found")
+        console.print("[yellow]Please connect a microphone and try again[/yellow]")
+        sys.exit(1)
+
+    return input_devices
+
+
+def select_audio_device(devices: list[dict]) -> int:
+    """Interactive device selection with arrow keys and beautiful styling.
+
+    Args:
+        devices: List of device dicts from list_audio_devices()
+
+    Returns:
+        Device index to use, or -1 for system default
+    """
+    from simple_term_menu import TerminalMenu
+
+    # Print header
+    console.print("\n[bold cyan]Available Microphones[/bold cyan]")
+    console.print("[dim]Use arrow keys ↑↓ to navigate, Enter to select[/dim]\n")
+
+    # Format table-like entries with fixed column widths
+    # Column widths: Device Name (50), Channels (10), Index (7)
+    device_col_width = 50
+    channels_col_width = 10
+    index_col_width = 7
+
+    # Create formatted entries
+    menu_entries = []
+    index_map = []
+
+    # Header row (non-selectable, will be shown as title)
+    header = (
+        f"{'Device Name':<{device_col_width}} "
+        f"{'Channels':^{channels_col_width}} "
+        f"{'Index':^{index_col_width}}"
+    )
+    separator = "─" * (device_col_width + channels_col_width + index_col_width + 2)
+
+    # Add System Default
+    default_entry = (
+        f"{'System Default':<{device_col_width}} "
+        f"{'-':^{channels_col_width}} "
+        f"{'-':^{index_col_width}}"
+    )
+    menu_entries.append(default_entry)
+    index_map.append(-1)
+
+    # Add all devices
+    for d in devices:
+        name = d['name']
+        if len(name) > device_col_width:
+            name = name[:device_col_width - 3] + "..."
+
+        entry = (
+            f"{name:<{device_col_width}} "
+            f"{str(d['channels']):^{channels_col_width}} "
+            f"{str(d['index']):^{index_col_width}}"
+        )
+        menu_entries.append(entry)
+        index_map.append(d['index'])
+
+    # Create terminal menu with cyan theme and header
+    terminal_menu = TerminalMenu(
+        menu_entries,
+        title=f"{header}\n{separator}",
+        menu_cursor="→ ",
+        menu_cursor_style=("fg_cyan", "bold"),
+        menu_highlight_style=("fg_cyan", "bold"),
+        cycle_cursor=True,
+        clear_screen=False
+    )
+
+    try:
+        # Show menu and get selection
+        menu_entry_index = terminal_menu.show()
+
+        console.print()  # Empty line for spacing
+
+        if menu_entry_index is not None:
+            return index_map[menu_entry_index]
+        else:
+            # User cancelled (Ctrl+C or ESC)
+            return -1
+    except KeyboardInterrupt:
+        console.print("\n")
+        return -1
+
+
+def record_audio_fixed_duration(device_index: int, duration: float) -> Path:
+    """Record audio for a fixed duration with progress bar.
+
+    Args:
+        device_index: Device index from select_audio_device(), or -1 for default
+        duration: Recording duration in seconds
+
+    Returns:
+        Path to temporary WAV file containing the recording
+
+    Raises:
+        SystemExit: If recording fails
+    """
+    import sounddevice as sd
+    import soundfile as sf
+
+    config = CONFIG["recording"]
+    sample_rate = config["sample_rate"]
+    channels = config["channels"]
+
+    # Create temp WAV file
+    temp_file = tempfile.NamedTemporaryFile(
+        suffix='.wav',
+        delete=False,
+        dir=config["temp_dir"] or None
+    )
+    temp_path = Path(temp_file.name)
+    temp_file.close()
+
+    console.print(f"\n[cyan]Recording for {duration:.0f} seconds...[/cyan]")
+
+    try:
+        from rich.progress import BarColumn
+
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TimeElapsedColumn(),
+            console=console
+        ) as progress:
+            task = progress.add_task("Recording...", total=duration)
+
+            # Record with sounddevice
+            recording = sd.rec(
+                int(duration * sample_rate),
+                samplerate=sample_rate,
+                channels=channels,
+                device=device_index if device_index >= 0 else None,
+                dtype='int16'
+            )
+
+            # Update progress while recording
+            import time
+            elapsed = 0.0
+            while elapsed < duration:
+                time.sleep(0.1)
+                elapsed += 0.1
+                progress.update(task, completed=min(elapsed, duration))
+
+            sd.wait()  # Wait for recording to complete
+            progress.update(task, completed=duration)
+
+        # Save to WAV file
+        sf.write(temp_path, recording, sample_rate)
+        console.print("[green]✓[/green] Recording complete")
+
+        return temp_path
+
+    except KeyboardInterrupt:
+        console.print("\n[yellow]! Recording cancelled[/yellow]")
+        if temp_path.exists():
+            temp_path.unlink()
+        sys.exit(130)
+    except Exception as e:
+        console.print(f"[bold red]✗[/bold red] Recording failed: {e}")
+        if temp_path.exists():
+            temp_path.unlink()
+        sys.exit(1)
+
+
+def record_audio_interactive(device_index: int) -> Path:
+    """Record audio with manual start/stop control (Enter key).
+
+    Args:
+        device_index: Device index from select_audio_device(), or -1 for default
+
+    Returns:
+        Path to temporary WAV file containing the recording
+
+    Raises:
+        SystemExit: If recording fails or is cancelled
+    """
+    import sounddevice as sd
+    import soundfile as sf
+    import threading
+    import numpy as np
+
+    config = CONFIG["recording"]
+    sample_rate = config["sample_rate"]
+    channels = config["channels"]
+
+    # Create temp file
+    temp_file = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
+    temp_path = Path(temp_file.name)
+    temp_file.close()
+
+    console.print("\n[dim]Press ENTER to start recording...[/dim]")
+    input()
+
+    # Recording state
+    recording_data = []
+    stop_event = threading.Event()
+
+    def audio_callback(indata, frames, time_info, status):
+        """Called by sounddevice for each audio block"""
+        if status:
+            console.print(f"[yellow]Status: {status}[/yellow]")
+        recording_data.append(indata.copy())
+
+    # No separate input thread needed - we'll check in the main loop
+
+    try:
+        from rich.live import Live
+        from rich.panel import Panel
+        import time
+        import sys
+        import select
+        import tty
+        import termios
+
+        # Save original terminal settings
+        old_settings = termios.tcgetattr(sys.stdin)
+
+        try:
+            # Set terminal to cbreak mode (no echo, but process signals normally)
+            tty.setcbreak(sys.stdin.fileno())
+
+            start_time = time.time()
+
+            # Pulsing animation states
+            pulse_states = [
+                "[bold red]●[/bold red]",
+                "[red]●[/red]",
+                "[bold red]●[/bold red]",
+                "[red]○[/red]"
+            ]
+
+            with sd.InputStream(
+                device=device_index if device_index >= 0 else None,
+                channels=channels,
+                samplerate=sample_rate,
+                dtype='int16',
+                callback=audio_callback
+            ):
+                # Create live panel with pulsing red dot
+                pulse_idx = 0
+
+                with Live(console=console, refresh_per_second=4, transient=False) as live:
+                    while not stop_event.is_set():
+                        # Check for Ctrl+D (non-blocking)
+                        ready, _, _ = select.select([sys.stdin], [], [], 0)
+                        if ready:
+                            try:
+                                char = sys.stdin.read(1)
+                                if char == '\x04':  # Ctrl+D (EOT)
+                                    stop_event.set()
+                                    break
+                            except:
+                                pass
+
+                        elapsed = time.time() - start_time
+                        duration_str = format_duration(elapsed)
+
+                        # Calculate file size in real-time
+                        # sample_rate * channels * bytes_per_sample (int16 = 2 bytes) * duration
+                        file_size_bytes = sample_rate * channels * 2 * elapsed
+                        if file_size_bytes < 1024 * 1024:  # Less than 1 MB
+                            file_size_str = f"{file_size_bytes / 1024:.1f} KB"
+                        else:
+                            file_size_str = f"{file_size_bytes / (1024 * 1024):.2f} MB"
+
+                        # Pulsing red dot
+                        dot = pulse_states[pulse_idx % len(pulse_states)]
+                        pulse_idx += 1
+
+                        # Update live display
+                        live.update(
+                            Panel(
+                                f"{dot} [bold]RECORDING[/bold]\n"
+                                f"[dim]Duration: {duration_str}[/dim]\n"
+                                f"[dim]File size: {file_size_str}[/dim]\n\n"
+                                f"[dim]Press Ctrl+D to stop[/dim]",
+                                border_style="red",
+                                box=box.ROUNDED
+                            )
+                        )
+                        time.sleep(0.25)
+        finally:
+            # Always restore terminal settings
+            termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
+
+        console.print("\n[green]✓[/green] Recording stopped")
+
+        # Combine all chunks and save
+        if not recording_data:
+            console.print("[yellow]Warning: No audio data recorded[/yellow]")
+            if temp_path.exists():
+                temp_path.unlink()
+            sys.exit(1)
+
+        full_recording = np.concatenate(recording_data, axis=0)
+        sf.write(temp_path, full_recording, sample_rate)
+
+        return temp_path
+
+    except KeyboardInterrupt:
+        console.print("\n[yellow]! Recording cancelled[/yellow]")
+        if temp_path.exists():
+            temp_path.unlink()
+        sys.exit(130)
+    except Exception as e:
+        console.print(f"\n[bold red]✗[/bold red] Recording failed: {e}")
+        if temp_path.exists():
+            temp_path.unlink()
+        sys.exit(1)
+
+
+def record_and_transcribe(
+    output_file: Path,
+    language: str = None,
+    model_size: str = "turbo"
+):
+    """Main recording mode orchestrator.
+
+    Manages the full recording workflow:
+    1. List and select microphone
+    2. Record audio (manual or fixed duration)
+    3. Transcribe using existing transcribe_audio()
+    4. Clean up temporary files
+
+    Args:
+        output_file: Path to save transcription
+        language: Language code (e.g., 'en', 'de') or None for auto-detect
+        model_size: Whisper model to use
+    """
+    import shutil
+
+    # Header
+    print_header(model_size)
+    console.print("\n[bold cyan]🎙️  RECORDING MODE[/bold cyan]\n")
+
+    # Check disk space
+    temp_dir = Path(tempfile.gettempdir())
+    try:
+        stat = shutil.disk_usage(temp_dir)
+        if stat.free < 100 * 1024 * 1024:  # Less than 100MB
+            console.print("[bold red]✗[/bold red] Insufficient disk space")
+            console.print(f"[yellow]Free space: {stat.free / (1024*1024):.1f} MB[/yellow]")
+            console.print("[dim]Need at least 100 MB for recording[/dim]")
+            sys.exit(1)
+    except:
+        pass  # Skip disk check if it fails
+
+    # Step 1: List and select device (or use from config)
+    config_device = CONFIG["recording"].get("default_device", -1)
+
+    if config_device != -1:
+        # Use device from config without asking
+        device_index = config_device
+        devices = list_audio_devices()
+
+        # Show which device is being used
+        device_name = next((d['name'] for d in devices if d['index'] == device_index), None)
+        if device_name:
+            if len(device_name) > 50:
+                device_name = device_name[:47] + "..."
+            console.print(f"\n[dim]Using microphone: [green]{device_name}[/green] (from config)[/dim]")
+        else:
+            console.print(f"\n[yellow]Warning: Device index {device_index} from config not found[/yellow]")
+            console.print("[dim]Falling back to device selection...[/dim]")
+            device_index = select_audio_device(devices)
+    else:
+        # Interactive device selection
+        devices = list_audio_devices()
+        device_index = select_audio_device(devices)
+
+        if device_index == -1:
+            console.print("[dim]Using system default microphone[/dim]")
+        else:
+            device_name = next((d['name'] for d in devices if d['index'] == device_index), "Unknown")
+            # Truncate long names
+            if len(device_name) > 50:
+                device_name = device_name[:47] + "..."
+            console.print(f"[dim]Selected: [green]{device_name}[/green][/dim]")
+
+    # Step 2: Record audio (manual mode only)
+    temp_wav_path = None
+
+    try:
+        # Record with manual start/stop
+        temp_wav_path = record_audio_interactive(device_index)
+
+        # Step 3: Transcribe (reuse existing function!)
+        console.print("\n[cyan]Recording complete! Starting transcription...[/cyan]")
+        transcribe_audio(temp_wav_path, output_file, language, model_size)
+
+    finally:
+        # Step 4: Cleanup
+        if temp_wav_path and temp_wav_path.exists():
+            if CONFIG["recording"].get("keep_recording", False):
+                console.print(f"[dim]Recording saved: {temp_wav_path}[/dim]")
+            else:
+                try:
+                    os.unlink(temp_wav_path)
+                except:
+                    pass  # Ignore cleanup errors
+
+
+# =============================================================================
 # Batch Mode Functions
 # =============================================================================
 
@@ -774,6 +1232,10 @@ Examples:
     %(prog)s ./recordings/ combined_output.txt --language de
     %(prog)s /path/to/lectures/ transcript.txt --model medium
 
+  Recording mode:
+    %(prog)s record output.txt
+    %(prog)s record transcript.txt --model turbo --language de
+
 Available models:
   turbo    - Large-v3-turbo, ~800MB, 8x faster, multilingual (default)
   large    - Best accuracy (v3), ~3GB
@@ -782,16 +1244,18 @@ Available models:
   small    - Fast, ~466MB, lower accuracy
   base     - Very fast, ~145MB, basic accuracy
 
-Batch mode:
-  When input is a directory, all audio files are processed in natural
-  sort order and combined into a single output file.
+Modes:
+  - Single file: Transcribe one audio file
+  - Batch: When input is a directory, all audio files are processed in natural
+    sort order and combined into a single output file
+  - Recording: Use "record" as input to record from microphone and transcribe
         """
     )
 
     parser.add_argument(
         "input",
-        type=Path,
-        help="Input audio file or directory (for batch mode)"
+        type=str,  # Changed from Path to str to allow "record" keyword
+        help="Input audio file, directory (batch mode), or 'record' (recording mode)"
     )
 
     parser.add_argument(
@@ -818,11 +1282,20 @@ Batch mode:
     args = parser.parse_args()
 
     try:
-        # Check if input is directory (batch mode) or single file
-        if args.input.is_dir():
-            transcribe_batch(args.input, args.output_file, args.language, args.model)
+        # Check mode: recording, batch (directory), or single file
+        if args.input.lower() == "record":
+            # Recording mode
+            record_and_transcribe(args.output_file, args.language, args.model)
         else:
-            transcribe_audio(args.input, args.output_file, args.language, args.model)
+            # Convert input to Path for file/directory modes
+            input_path = Path(args.input)
+
+            if input_path.is_dir():
+                # Batch mode
+                transcribe_batch(input_path, args.output_file, args.language, args.model)
+            else:
+                # Single file mode
+                transcribe_audio(input_path, args.output_file, args.language, args.model)
     except KeyboardInterrupt:
         console.print("\n\n[yellow]! Operation cancelled by user[/yellow]")
         console.print("[dim]Exiting gracefully...[/dim]\n")
