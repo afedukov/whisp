@@ -384,6 +384,8 @@ def transcribe_audio(audio_file: Path, output_file: Path, language: str = None, 
         sys.exit(1)
 
     try:
+        import time
+        
         # Get audio duration
         audio_duration = get_audio_duration(audio_file)
         duration_str = format_duration(audio_duration) if audio_duration > 0 else "unknown"
@@ -392,6 +394,8 @@ def transcribe_audio(audio_file: Path, output_file: Path, language: str = None, 
         console.print(f"\n[bold cyan]Transcribing audio file...[/bold cyan]")
         console.print(f"[dim]Input: {audio_file}[/dim]")
         console.print(f"[dim]Duration: {duration_str}[/dim]")
+        
+        transcribe_start_time = time.time()
 
         with Progress(
             SpinnerColumn(),
@@ -448,9 +452,24 @@ def transcribe_audio(audio_file: Path, output_file: Path, language: str = None, 
         ))
 
         # Stats
+        from rich.table import Table
+        
+        processing_time = time.time() - transcribe_start_time
+        speed_ratio = audio_duration / processing_time if processing_time > 0 and audio_duration > 0 else 0
+        
         word_count = len(transcription.split())
         char_count = len(transcription)
-        console.print(f"\n[dim]Stats: {word_count} words, {char_count} characters[/dim]")
+        
+        console.print("\n[bold cyan]Stats:[/bold cyan]")
+        stats_table = Table(box=box.ROUNDED, border_style="green", show_header=False)
+        stats_table.add_column("Metric", style="dim")
+        stats_table.add_column("Value", style="bold")
+        stats_table.add_row("Duration", duration_str)
+        stats_table.add_row("Processing time", format_duration(processing_time))
+        stats_table.add_row("Speed", f"{speed_ratio:.1f}x realtime")
+        stats_table.add_row("Words", f"{word_count:,}")
+        stats_table.add_row("Characters", f"{char_count:,}")
+        console.print(stats_table)
 
         console.print("\n[bold green]Transcription completed successfully![/bold green]\n")
 
@@ -641,9 +660,8 @@ def transcribe_batch(input_dir: Path, output_file: Path, language: str = None, m
                 try:
                     transcription, info = transcribe_single_file(model, audio_file, language, quiet=True)
                     
-                    # Add separator between files
-                    file_header = f"\n\n{'='*60}\n📄 {audio_file.name}\n{'='*60}\n\n"
-                    all_transcriptions.append(file_header + transcription)
+                    # Just add text with newline separator (no file headers)
+                    all_transcriptions.append(transcription)
                     
                     word_count = len(transcription.split())
                     char_count = len(transcription)
@@ -659,7 +677,7 @@ def transcribe_batch(input_dir: Path, output_file: Path, language: str = None, m
                     
                 except Exception as e:
                     file_statuses[i] = f"[red]✗ error[/red]"
-                    all_transcriptions.append(f"\n\n{'='*60}\n📄 {audio_file.name}\n{'='*60}\n\n[ERROR: {str(e)}]")
+                    all_transcriptions.append(f"[ERROR: {audio_file.name}: {str(e)}]")
                 
                 current_file_index[0] = -1
                 live.update(make_table())
@@ -670,7 +688,7 @@ def transcribe_batch(input_dir: Path, output_file: Path, language: str = None, m
     # Combine and save
     console.print(f"\n[bold cyan]Saving combined transcription...[/bold cyan]")
     
-    combined_text = "".join(all_transcriptions).strip()
+    combined_text = "\n\n".join(all_transcriptions).strip()
     output_file.write_text(combined_text, encoding='utf-8')
     
     console.print(f"[bold green]✓[/bold green] Saved to: {output_file}")
