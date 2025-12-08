@@ -504,8 +504,8 @@ def transcribe_audio(audio_file: Path, output_file: Path, language: str = None, 
     if not check_file_exists(audio_file):
         sys.exit(1)
 
-    console.print(f"\n[dim]Input: {audio_file}[/dim]")
-    console.print(f"[dim]Output: {output_file}[/dim]")
+    console.print(f"\n[dim]Input: {audio_file.resolve()}[/dim]")
+    console.print(f"[dim]Output: {output_file.resolve()}[/dim]")
 
     # Determine device
     try:
@@ -604,7 +604,7 @@ def transcribe_audio(audio_file: Path, output_file: Path, language: str = None, 
     # Save transcription
     console.print(f"\n[bold cyan]Saving transcription...[/bold cyan]")
     output_file.write_text(transcription, encoding='utf-8')
-    console.print(f"[bold green]✓[/bold green] Saved to: {output_file}")
+    console.print(f"[bold green]✓[/bold green] Saved to: {output_file.resolve()}")
 
     # Display preview
     preview_length = CONFIG["output"]["preview_length"]
@@ -1235,7 +1235,7 @@ def record_and_transcribe(
         # Step 4: Cleanup
         if temp_wav_path and temp_wav_path.exists():
             if CONFIG["recording"].get("keep_recording", False):
-                console.print(f"\n[bold green]✓[/bold green] [bold cyan]Recording saved:[/bold cyan] [green]{temp_wav_path}[/green]")
+                console.print(f"\n[bold green]✓[/bold green] [bold cyan]Recording saved:[/bold cyan] [green]{temp_wav_path.resolve()}[/green]")
             else:
                 try:
                     os.unlink(temp_wav_path)
@@ -1332,8 +1332,8 @@ def transcribe_batch(input_dir: Path, output_file: Path, language: str = None, m
     
     # Print batch mode header
     console.print("\n[bold magenta]📦 BATCH MODE[/bold magenta]")
-    console.print(f"[dim]Directory: {input_dir}[/dim]")
-    console.print(f"[dim]Output: {output_file}[/dim]")
+    console.print(f"[dim]Directory: {input_dir.resolve()}[/dim]")
+    console.print(f"[dim]Output: {output_file.resolve()}[/dim]")
     
     # Calculate total duration
     total_duration = 0.0
@@ -1459,7 +1459,7 @@ def transcribe_batch(input_dir: Path, output_file: Path, language: str = None, m
     combined_text = "\n\n".join(all_transcriptions).strip()
     output_file.write_text(combined_text, encoding='utf-8')
     
-    console.print(f"[bold green]✓[/bold green] Saved to: {output_file}")
+    console.print(f"[bold green]✓[/bold green] Saved to: {output_file.resolve()}")
     
     # Final stats
     # Calculate total processing time and speed
