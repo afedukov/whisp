@@ -93,7 +93,7 @@ recording:
   # Directory to save recordings (only used when keep_recording is true)
   # Empty = system temp directory (recordings will be deleted after transcription)
   # Path = save recordings with timestamp to this directory
-  save_dir: "/Users/andrey.fedyukov/projects/whisp/output"
+  save_dir: "./output"
 
   # Keep recording file after transcription
   # true = save with timestamp in save_dir, false = delete after transcription
