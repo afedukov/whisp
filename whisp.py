@@ -113,7 +113,7 @@ def format_duration(seconds: float) -> str:
         return f"{minutes:02d}:{secs:02d}"
 
 
-def convert_audio_to_wav(audio_file: Path) -> Path:
+def convert_audio_to_wav(audio_file: Path, quiet: bool = False) -> Path:
     """Convert audio to WAV format using ffmpeg if needed"""
     # Check if file is already in a format that soundfile can handle
     supported_formats = ['.wav', '.flac']
@@ -128,7 +128,8 @@ def convert_audio_to_wav(audio_file: Path) -> Path:
         console.print("[dim]Ubuntu: sudo apt install ffmpeg[/dim]")
         sys.exit(1)
 
-    console.print(f"[cyan]Converting {audio_file.suffix} to WAV format...[/cyan]")
+    if not quiet:
+        console.print(f"[cyan]Converting {audio_file.suffix} to WAV format...[/cyan]")
 
     try:
         # Create temporary WAV file
@@ -159,7 +160,8 @@ def convert_audio_to_wav(audio_file: Path) -> Path:
             console.print(f"[dim]{result.stderr}[/dim]")
             raise RuntimeError(f"FFmpeg failed with code {result.returncode}")
 
-        console.print("[green]✓[/green] Audio converted successfully")
+        if not quiet:
+            console.print("[green]✓[/green] Audio converted successfully")
         return temp_wav_path
 
     except FileNotFoundError:
@@ -381,13 +383,7 @@ def transcribe_audio(audio_file: Path, output_file: Path, language: str = None, 
         console.print(f"\n[bold red]✗[/bold red] Failed to load model: {str(e)}")
         sys.exit(1)
 
-    # Convert audio if needed
-    temp_file = None
     try:
-        converted_audio = convert_audio_to_wav(audio_file)
-        if converted_audio != audio_file:
-            temp_file = converted_audio  # Mark for cleanup later
-
         # Get audio duration
         audio_duration = get_audio_duration(audio_file)
         duration_str = format_duration(audio_duration) if audio_duration > 0 else "unknown"
@@ -408,9 +404,9 @@ def transcribe_audio(audio_file: Path, output_file: Path, language: str = None, 
                 total=None
             )
 
-            # Transcribe with faster-whisper
+            # Transcribe with faster-whisper (handles all formats via ffmpeg)
             segments, info = model.transcribe(
-                str(converted_audio),
+                str(audio_file),
                 language=language,
                 task="transcribe",
                 beam_size=5,
@@ -465,13 +461,6 @@ def transcribe_audio(audio_file: Path, output_file: Path, language: str = None, 
     except Exception as e:
         console.print(f"\n[bold red]✗[/bold red] Transcription failed: {str(e)}")
         sys.exit(1)
-    finally:
-        # Clean up temporary file if created
-        if temp_file and temp_file.exists():
-            try:
-                os.unlink(temp_file)
-            except Exception:
-                pass  # Ignore cleanup errors
 
 
 # =============================================================================
@@ -503,52 +492,44 @@ def get_audio_files(directory: Path) -> list[Path]:
     return audio_files
 
 
-def transcribe_single_file(model, audio_file: Path, language: str = None) -> tuple[str, dict]:
+def transcribe_single_file(model, audio_file: Path, language: str = None, quiet: bool = False) -> tuple[str, dict]:
     """Transcribe a single audio file using pre-loaded model.
     Returns (transcription_text, info_dict)
+    
+    Args:
+        quiet: If True, suppress console output (for batch mode)
+    
+    Note: faster-whisper handles audio formats (m4a, mp3, etc.) directly via ffmpeg
     """
-    temp_file = None
-    try:
-        converted_audio = convert_audio_to_wav(audio_file)
-        if converted_audio != audio_file:
-            temp_file = converted_audio
+    # Transcribe with faster-whisper (handles all formats via ffmpeg)
+    segments, info = model.transcribe(
+        str(audio_file),
+        language=language,
+        task="transcribe",
+        beam_size=5,
+        vad_filter=True,
+        vad_parameters=dict(min_silence_duration_ms=500)
+    )
 
-        # Transcribe with faster-whisper
-        segments, info = model.transcribe(
-            str(converted_audio),
-            language=language,
-            task="transcribe",
-            beam_size=5,
-            vad_filter=True,
-            vad_parameters=dict(min_silence_duration_ms=500)
-        )
+    # Collect all segments
+    transcription_parts = []
+    for segment in segments:
+        transcription_parts.append(segment.text)
 
-        # Collect all segments
-        transcription_parts = []
-        for segment in segments:
-            transcription_parts.append(segment.text)
-
-        transcription = " ".join(transcription_parts).strip()
-        
-        info_dict = {
-            "language": info.language,
-            "probability": info.language_probability
-        }
-        
-        return transcription, info_dict
-
-    finally:
-        if temp_file and temp_file.exists():
-            try:
-                os.unlink(temp_file)
-            except Exception:
-                pass
+    transcription = " ".join(transcription_parts).strip()
+    
+    info_dict = {
+        "language": info.language,
+        "probability": info.language_probability
+    }
+    
+    return transcription, info_dict
 
 
 def transcribe_batch(input_dir: Path, output_file: Path, language: str = None, model_size: str = "large"):
     """Transcribe all audio files in a directory (batch mode)"""
     from rich.table import Table
-    from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, MofNCompleteColumn, TimeElapsedColumn
+    from rich.live import Live
     
     print_header(model_size)
     
@@ -582,19 +563,7 @@ def transcribe_batch(input_dir: Path, output_file: Path, language: str = None, m
         file_durations.append(dur)
         total_duration += dur
     
-    # Show files table
     console.print(f"\n[bold cyan]Found {len(audio_files)} audio files:[/bold cyan]")
-    
-    table = Table(box=box.ROUNDED, border_style="dim")
-    table.add_column("#", style="dim", width=4)
-    table.add_column("File", style="cyan")
-    table.add_column("Duration", style="green", justify="right")
-    
-    for i, (f, dur) in enumerate(zip(audio_files, file_durations), 1):
-        dur_str = format_duration(dur) if dur > 0 else "?"
-        table.add_row(str(i), f.name, dur_str)
-    
-    console.print(table)
     console.print(f"[dim]Total duration: {format_duration(total_duration)}[/dim]\n")
     
     # Determine device
@@ -613,49 +582,90 @@ def transcribe_batch(input_dir: Path, output_file: Path, language: str = None, m
         console.print(f"\n[bold red]✗[/bold red] Failed to load model: {str(e)}")
         sys.exit(1)
     
-    # Process files
-    console.print(f"\n[bold cyan]Processing files...[/bold cyan]")
+    # Initialize status tracking
+    # Status: "" = pending, "⏹ MM:SS" = in progress with elapsed time, "✓ N words" = done, "✗ error" = failed
+    file_statuses = ["" for _ in audio_files]
+    current_file_index = [-1]  # Use list to allow mutation from inner function
+    processing_start_time = [0.0]
+    
+    import time
+    import threading
+    
+    def make_table():
+        """Create the progress table with current statuses"""
+        table = Table(box=box.ROUNDED, border_style="cyan")
+        table.add_column("#", style="dim", width=4, justify="right")
+        table.add_column("File", style="cyan", no_wrap=True)
+        table.add_column("Duration", style="green", justify="right", width=8)
+        table.add_column("Status", justify="left", width=16)
+        
+        for i, (f, dur, status) in enumerate(zip(audio_files, file_durations, file_statuses), 1):
+            dur_str = format_duration(dur) if dur > 0 else "?"
+            # If this is the currently processing file, show elapsed time
+            if i - 1 == current_file_index[0] and processing_start_time[0] > 0:
+                elapsed = time.time() - processing_start_time[0]
+                elapsed_str = format_duration(elapsed)
+                status = f"[yellow]⏹ {elapsed_str}[/yellow]"
+            table.add_row(str(i), f.name, dur_str, status)
+        
+        return table
+    
+    # Process files with live table
+    console.print(f"\n[bold cyan]Processing...[/bold cyan]")
     
     all_transcriptions = []
     total_words = 0
     total_chars = 0
+    batch_start_time = time.time()  # Track total processing time
     
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(bar_width=30),
-        MofNCompleteColumn(),
-        TimeElapsedColumn(),
-        console=console,
-    ) as progress:
+    stop_refresh = threading.Event()
+    
+    def refresh_loop(live):
+        """Background thread to refresh elapsed time"""
+        while not stop_refresh.is_set():
+            live.update(make_table())
+            time.sleep(0.5)
+    
+    with Live(make_table(), console=console, refresh_per_second=4) as live:
+        # Start background refresh thread
+        refresh_thread = threading.Thread(target=refresh_loop, args=(live,), daemon=True)
+        refresh_thread.start()
         
-        main_task = progress.add_task(
-            "[cyan]Transcribing...",
-            total=len(audio_files)
-        )
-        
-        for i, audio_file in enumerate(audio_files, 1):
-            progress.update(main_task, description=f"[cyan]{audio_file.name}")
-            
-            try:
-                transcription, info = transcribe_single_file(model, audio_file, language)
+        try:
+            for i, audio_file in enumerate(audio_files):
+                # Update status to "processing"
+                current_file_index[0] = i
+                processing_start_time[0] = time.time()
+                live.update(make_table())
                 
-                # Add separator between files
-                file_header = f"\n\n{'='*60}\n📄 {audio_file.name}\n{'='*60}\n\n"
-                all_transcriptions.append(file_header + transcription)
+                try:
+                    transcription, info = transcribe_single_file(model, audio_file, language, quiet=True)
+                    
+                    # Add separator between files
+                    file_header = f"\n\n{'='*60}\n📄 {audio_file.name}\n{'='*60}\n\n"
+                    all_transcriptions.append(file_header + transcription)
+                    
+                    word_count = len(transcription.split())
+                    char_count = len(transcription)
+                    total_words += word_count
+                    total_chars += char_count
+                    
+                    # Calculate elapsed time for this file
+                    elapsed = time.time() - processing_start_time[0]
+                    elapsed_str = format_duration(elapsed)
+                    
+                    # Update status to "done" with time
+                    file_statuses[i] = f"[green]✓ {word_count} words[/green]"
+                    
+                except Exception as e:
+                    file_statuses[i] = f"[red]✗ error[/red]"
+                    all_transcriptions.append(f"\n\n{'='*60}\n📄 {audio_file.name}\n{'='*60}\n\n[ERROR: {str(e)}]")
                 
-                word_count = len(transcription.split())
-                char_count = len(transcription)
-                total_words += word_count
-                total_chars += char_count
-                
-                console.print(f"  [green]✓[/green] {audio_file.name} ({word_count} words)")
-                
-            except Exception as e:
-                console.print(f"  [red]✗[/red] {audio_file.name}: {str(e)}")
-                all_transcriptions.append(f"\n\n{'='*60}\n📄 {audio_file.name}\n{'='*60}\n\n[ERROR: {str(e)}]")
-            
-            progress.advance(main_task)
+                current_file_index[0] = -1
+                live.update(make_table())
+        finally:
+            stop_refresh.set()
+            refresh_thread.join(timeout=1)
     
     # Combine and save
     console.print(f"\n[bold cyan]Saving combined transcription...[/bold cyan]")
@@ -666,12 +676,18 @@ def transcribe_batch(input_dir: Path, output_file: Path, language: str = None, m
     console.print(f"[bold green]✓[/bold green] Saved to: {output_file}")
     
     # Final stats
+    # Calculate total processing time and speed
+    batch_elapsed_time = time.time() - batch_start_time
+    speed_ratio = total_duration / batch_elapsed_time if batch_elapsed_time > 0 else 0
+    
     console.print("\n[bold cyan]Summary:[/bold cyan]")
     summary_table = Table(box=box.ROUNDED, border_style="green", show_header=False)
     summary_table.add_column("Metric", style="dim")
     summary_table.add_column("Value", style="bold")
     summary_table.add_row("Files processed", str(len(audio_files)))
     summary_table.add_row("Total duration", format_duration(total_duration))
+    summary_table.add_row("Processing time", format_duration(batch_elapsed_time))
+    summary_table.add_row("Speed", f"{speed_ratio:.1f}x realtime")
     summary_table.add_row("Total words", f"{total_words:,}")
     summary_table.add_row("Total characters", f"{total_chars:,}")
     console.print(summary_table)
