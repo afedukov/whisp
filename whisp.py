@@ -53,6 +53,52 @@ MODEL_INFO = {
     "base": "Very fast, ~145MB, basic accuracy"
 }
 
+# Default configuration values
+DEFAULT_CONFIG = {
+    "model": {
+        "default": "turbo",
+        "compute_type_cpu": "int8",
+        "compute_type_gpu": "float16"
+    },
+    "transcription": {
+        "default_language": "",
+        "beam_size": 5,
+        "vad_filter": True,
+        "min_silence_duration_ms": 500
+    },
+    "output": {
+        "preview_length": 200
+    }
+}
+
+def load_config() -> dict:
+    """Load configuration from config.yaml in the app directory.
+    Falls back to default values if file not found or invalid.
+    """
+    import yaml
+    
+    config_path = Path(__file__).parent / "config.yaml"
+    config = DEFAULT_CONFIG.copy()
+    
+    if config_path.exists():
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                user_config = yaml.safe_load(f)
+            
+            if user_config:
+                # Deep merge user config with defaults
+                for section in DEFAULT_CONFIG:
+                    if section in user_config and isinstance(user_config[section], dict):
+                        config[section] = {**DEFAULT_CONFIG[section], **user_config[section]}
+        except Exception as e:
+            console.print(f"[yellow]Warning: Could not load config.yaml: {e}[/yellow]")
+            console.print("[dim]Using default configuration[/dim]")
+    
+    return config
+
+# Load configuration at startup
+CONFIG = load_config()
+
 
 def print_header(model_size: str = "large"):
     """Print a beautiful header for the application"""
@@ -317,14 +363,12 @@ def load_model(device: str, model_size: str = "large"):
     console.print("[dim]Using faster-whisper for optimized performance[/dim]")
 
     try:
-        # Determine compute type based on device
-        # int8 is good balance of speed and accuracy for CPU
-        # float16 for GPU (if available)
+        # Determine compute type based on device (from config)
         if device == "cuda" or device.startswith("cuda:"):
-            compute_type = "float16"
+            compute_type = CONFIG["model"]["compute_type_gpu"]
             device_type = "cuda"
         else:
-            compute_type = "int8"
+            compute_type = CONFIG["model"]["compute_type_cpu"]
             device_type = "cpu"
 
         # First download model with progress bar
@@ -413,9 +457,9 @@ def transcribe_audio(audio_file: Path, output_file: Path, language: str = None, 
                 str(audio_file),
                 language=language,
                 task="transcribe",
-                beam_size=5,
-                vad_filter=True,  # Voice activity detection to skip silence
-                vad_parameters=dict(min_silence_duration_ms=500)
+                beam_size=CONFIG["transcription"]["beam_size"],
+                vad_filter=CONFIG["transcription"]["vad_filter"],
+                vad_parameters=dict(min_silence_duration_ms=CONFIG["transcription"]["min_silence_duration_ms"])
             )
 
             # Collect all segments into full transcription
@@ -438,7 +482,7 @@ def transcribe_audio(audio_file: Path, output_file: Path, language: str = None, 
         console.print(f"[bold green]✓[/bold green] Transcription saved to: {output_file}")
 
         # Display preview
-        preview_length = 200
+        preview_length = CONFIG["output"]["preview_length"]
         preview = transcription[:preview_length]
         if len(transcription) > preview_length:
             preview += "..."
@@ -525,9 +569,9 @@ def transcribe_single_file(model, audio_file: Path, language: str = None, quiet:
         str(audio_file),
         language=language,
         task="transcribe",
-        beam_size=5,
-        vad_filter=True,
-        vad_parameters=dict(min_silence_duration_ms=500)
+        beam_size=CONFIG["transcription"]["beam_size"],
+        vad_filter=CONFIG["transcription"]["vad_filter"],
+        vad_parameters=dict(min_silence_duration_ms=CONFIG["transcription"]["min_silence_duration_ms"])
     )
 
     # Collect all segments

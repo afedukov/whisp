@@ -1,0 +1,68 @@
+# =============================================================================
+# Whisp Configuration File
+# =============================================================================
+# This file contains all configurable settings for the whisp transcription tool.
+# Edit these values to customize the default behavior.
+# Command-line arguments will override these settings.
+
+# =============================================================================
+# Model Settings
+# =============================================================================
+model:
+  # Default Whisper model to use for transcription
+  # Options: turbo, large, medium, small, base
+  #   - turbo:  ~800MB, 8x faster than large, good accuracy, multilingual (recommended)
+  #   - large:  ~3GB, best accuracy, slower processing
+  #   - medium: ~1.5GB, good balance of speed and accuracy
+  #   - small:  ~466MB, fast but lower accuracy
+  #   - base:   ~145MB, very fast, basic accuracy
+  default: "turbo"
+
+  # Compute type for CPU inference
+  # Options: int8, float32
+  #   - int8:    Faster, lower memory usage (recommended for CPU)
+  #   - float32: Higher precision, more memory
+  compute_type_cpu: "int8"
+
+  # Compute type for GPU (CUDA) inference
+  # Options: float16, float32, int8_float16
+  #   - float16:      Best balance of speed and memory for GPU (recommended)
+  #   - float32:      Higher precision, more VRAM usage
+  #   - int8_float16: Fastest, lowest VRAM, slightly lower accuracy
+  compute_type_gpu: "float16"
+
+# =============================================================================
+# Transcription Settings
+# =============================================================================
+transcription:
+  # Default language for transcription
+  # Leave empty ("") for automatic language detection
+  # Examples: "de" (German), "en" (English), "ru" (Russian), "es" (Spanish)
+  # Full list: https://github.com/openai/whisper#available-models-and-languages
+  default_language: ""
+
+  # Beam size for beam search decoding
+  # Higher values = better accuracy but slower processing
+  # Range: 1-10 (default: 5)
+  #   - 1:  Fastest, greedy decoding
+  #   - 5:  Good balance (recommended)
+  #   - 10: Best accuracy, slowest
+  beam_size: 5
+
+  # Voice Activity Detection (VAD) - skip silence in audio
+  # Speeds up transcription by ignoring silent parts
+  # Set to false if you need to preserve timing information
+  vad_filter: true
+
+  # Minimum silence duration in milliseconds to be skipped by VAD
+  # Lower values = more aggressive silence skipping
+  # Range: 100-2000 (default: 500)
+  min_silence_duration_ms: 500
+
+# =============================================================================
+# Output Settings
+# =============================================================================
+output:
+  # Preview length in characters shown after transcription
+  # Set to 0 to disable preview
+  preview_length: 500
