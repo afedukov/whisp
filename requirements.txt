@@ -1,0 +1,11 @@
+# Core dependencies
+torch>=2.0.0
+transformers>=4.36.0
+accelerate>=0.25.0
+
+# Audio processing
+soundfile>=0.12.1
+
+# CLI and UI
+rich>=13.0.0
+tqdm>=4.65.0
