@@ -755,7 +755,22 @@ def select_audio_device(devices: list[dict]) -> int:
         return -1
 
 
-def get_recording_file_path(suffix: str = '.wav') -> Path:
+def generate_timestamped_filename(suffix: str, prefix: str = "recording") -> str:
+    """Generate filename with timestamp.
+
+    Args:
+        suffix: File extension (e.g., '.txt', '.m4a')
+        prefix: Filename prefix (default: 'recording')
+
+    Returns:
+        Filename string like 'recording_20251208_185239.txt'
+    """
+    from datetime import datetime
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return f"{prefix}_{timestamp}{suffix}"
+
+
+def get_recording_file_path(suffix: str = '.wav', base_filename: str = None) -> Path:
     """Generate path for recording file based on config.
 
     If save_dir is configured and keep_recording is True, creates a timestamped
@@ -763,6 +778,8 @@ def get_recording_file_path(suffix: str = '.wav') -> Path:
 
     Args:
         suffix: File extension (e.g., '.wav', '.m4a')
+        base_filename: Optional base filename (e.g., 'recording_20251208_185239')
+                      If None, generates new timestamp
 
     Returns:
         Path object for the recording file
@@ -776,9 +793,10 @@ def get_recording_file_path(suffix: str = '.wav') -> Path:
         save_path = Path(save_dir)
         save_path.mkdir(parents=True, exist_ok=True)
 
-        from datetime import datetime
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"recording_{timestamp}{suffix}"
+        if base_filename:
+            filename = f"{base_filename}{suffix}"
+        else:
+            filename = generate_timestamped_filename(suffix)
         return save_path / filename
     else:
         # Create temporary file
@@ -788,12 +806,13 @@ def get_recording_file_path(suffix: str = '.wav') -> Path:
         return temp_path
 
 
-def record_audio_fixed_duration(device_index: int, duration: float) -> Path:
+def record_audio_fixed_duration(device_index: int, duration: float, base_filename: str = None) -> Path:
     """Record audio for a fixed duration with progress bar.
 
     Args:
         device_index: Device index from select_audio_device(), or -1 for default
         duration: Recording duration in seconds
+        base_filename: Optional base filename (e.g., 'recording_20251208_185239')
 
     Returns:
         Path to temporary audio file (WAV or M4A depending on config)
@@ -809,7 +828,7 @@ def record_audio_fixed_duration(device_index: int, duration: float) -> Path:
     channels = config["channels"]
 
     # Create WAV file (temp or permanent based on config)
-    temp_path = get_recording_file_path('.wav')
+    temp_path = get_recording_file_path('.wav', base_filename=base_filename)
 
     console.print(f"\n[cyan]Recording for {duration:.0f} seconds...[/cyan]")
 
@@ -877,11 +896,12 @@ def record_audio_fixed_duration(device_index: int, duration: float) -> Path:
         sys.exit(1)
 
 
-def record_audio_interactive(device_index: int) -> Path:
+def record_audio_interactive(device_index: int, base_filename: str = None) -> Path:
     """Record audio with manual start/stop control (Ctrl+D).
 
     Args:
         device_index: Device index from select_audio_device(), or -1 for default
+        base_filename: Optional base filename (e.g., 'recording_20251208_185239')
 
     Returns:
         Path to temporary audio file (WAV or M4A depending on config)
@@ -899,7 +919,7 @@ def record_audio_interactive(device_index: int) -> Path:
     channels = config["channels"]
 
     # Create WAV file (temp or permanent based on config)
-    temp_path = get_recording_file_path('.wav')
+    temp_path = get_recording_file_path('.wav', base_filename=base_filename)
 
     console.print("\n[dim]Press ENTER to start recording...[/dim]")
     input()
@@ -1068,7 +1088,7 @@ def record_audio_interactive(device_index: int) -> Path:
 
 
 def record_and_transcribe(
-    output_file: Path,
+    output_file: Path = None,
     language: str = None,
     model_size: str = "turbo"
 ):
@@ -1081,11 +1101,26 @@ def record_and_transcribe(
     4. Clean up temporary files
 
     Args:
-        output_file: Path to save transcription
+        output_file: Path to save transcription (optional, auto-generated if None)
         language: Language code (e.g., 'en', 'de') or None for auto-detect
         model_size: Whisper model to use
     """
     import shutil
+
+    # Generate timestamp for file naming (used for both audio and txt if output_file=None)
+    from datetime import datetime
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    # If output_file not specified, auto-generate in save_dir
+    if output_file is None:
+        save_dir = CONFIG["recording"].get("save_dir", "")
+        if save_dir:
+            save_path = Path(save_dir)
+            save_path.mkdir(parents=True, exist_ok=True)
+            output_file = save_path / f"recording_{timestamp}.txt"
+        else:
+            # No save_dir configured, use current directory
+            output_file = Path(f"recording_{timestamp}.txt")
 
     # Header
     print_header(model_size)
@@ -1138,9 +1173,12 @@ def record_and_transcribe(
     # Step 2: Record audio (manual mode only)
     temp_wav_path = None
 
+    # Generate base filename for consistent naming between audio and txt
+    base_filename = f"recording_{timestamp}"
+
     try:
         # Record with manual start/stop
-        temp_wav_path = record_audio_interactive(device_index)
+        temp_wav_path = record_audio_interactive(device_index, base_filename=base_filename)
 
         # Step 3: Transcribe (reuse existing function!)
         console.print("\n[cyan]Recording complete! Starting transcription...[/cyan]")
@@ -1404,14 +1442,17 @@ def main():
 Examples:
   Single file:
     %(prog)s input.mp3 output.txt
-    %(prog)s audio.wav transcript.txt --language en
+    %(prog)s input.mp3                    # Auto-generates input.txt
+    %(prog)s audio.wav --language en      # Auto-generates audio.txt
     %(prog)s lecture.mp3 transcript.txt --language de --model large
 
   Batch mode (directory input):
     %(prog)s ./recordings/ combined_output.txt --language de
-    %(prog)s /path/to/lectures/ transcript.txt --model medium
+    %(prog)s ./recordings/                # Auto-generates recordings.txt
+    %(prog)s /path/to/lectures/ --model medium
 
   Recording mode:
+    %(prog)s record                       # Auto-saves to save_dir/recording_TIMESTAMP.txt
     %(prog)s record output.txt
     %(prog)s record transcript.txt --model turbo --language de
 
@@ -1440,7 +1481,9 @@ Modes:
     parser.add_argument(
         "output_file",
         type=Path,
-        help="Output text file for transcription"
+        nargs='?',  # Make output_file optional
+        default=None,
+        help="Output text file for transcription (optional, auto-generated if not specified)"
     )
 
     parser.add_argument(
@@ -1469,12 +1512,25 @@ Modes:
             # Convert input to Path for file/directory modes
             input_path = Path(args.input)
 
+            # Generate output_file if not specified
+            output_file = args.output_file
+            if output_file is None:
+                # Auto-generate output filename based on input
+                if input_path.is_dir():
+                    # Batch mode: use directory name
+                    base_name = input_path.name or "transcription"
+                    output_file = Path(f"{base_name}.txt")
+                else:
+                    # Single file mode: use input filename
+                    base_name = input_path.stem  # filename without extension
+                    output_file = Path(f"{base_name}.txt")
+
             if input_path.is_dir():
                 # Batch mode
-                transcribe_batch(input_path, args.output_file, args.language, args.model)
+                transcribe_batch(input_path, output_file, args.language, args.model)
             else:
                 # Single file mode
-                transcribe_audio(input_path, args.output_file, args.language, args.model)
+                transcribe_audio(input_path, output_file, args.language, args.model)
     except KeyboardInterrupt:
         console.print("\n\n[yellow]Operation cancelled by user[/yellow]")
         console.print("[dim]Exiting gracefully...[/dim]\n")
