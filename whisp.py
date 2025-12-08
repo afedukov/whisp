@@ -20,8 +20,9 @@ import os
 import subprocess
 import shutil
 
-# Allow tqdm to show (remove filtering)
+# Filter out warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", category=UserWarning)
 
 console = Console()
 
@@ -44,7 +45,7 @@ MODEL_INFO = {
 def print_header(model_size: str = "large"):
     """Print a beautiful header for the application"""
     header = Text()
-    header.append("🎙️  Whisper Transcription Tool\n", style="bold cyan")
+    header.append("Whisper Transcription Tool\n", style="bold cyan")
     model_name = WHISPER_MODELS.get(model_size, WHISPER_MODELS["large"]).split("/")[-1]
     header.append(f"Powered by OpenAI {model_name}", style="dim")
 
@@ -62,6 +63,42 @@ def check_file_exists(file_path: Path) -> bool:
         console.print(f"[bold red]✗[/bold red] Error: Input file not found: {file_path}")
         return False
     return True
+
+
+def get_audio_duration(audio_file: Path) -> float:
+    """Get audio duration in seconds using ffprobe"""
+    try:
+        result = subprocess.run(
+            [
+                'ffprobe',
+                '-v', 'error',
+                '-show_entries', 'format=duration',
+                '-of', 'default=noprint_wrappers=1:nokey=1',
+                str(audio_file)
+            ],
+            capture_output=True,
+            text=True
+        )
+
+        if result.returncode == 0:
+            duration = float(result.stdout.strip())
+            return duration
+        else:
+            return 0.0
+    except:
+        return 0.0
+
+
+def format_duration(seconds: float) -> str:
+    """Format duration as MM:SS or HH:MM:SS"""
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = int(seconds % 60)
+
+    if hours > 0:
+        return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+    else:
+        return f"{minutes:02d}:{secs:02d}"
 
 
 def convert_audio_to_wav(audio_file: Path) -> Path:
@@ -127,7 +164,7 @@ def load_model(device: str, model_size: str = "large"):
     model_id = WHISPER_MODELS.get(model_size, WHISPER_MODELS["large"])
     model_info = MODEL_INFO.get(model_size, MODEL_INFO["large"])
 
-    console.print("\n[bold cyan]⚙️  Initializing Whisper model...[/bold cyan]")
+    console.print("\n[bold cyan]Initializing Whisper model...[/bold cyan]")
     console.print(f"[dim]Model: {model_size} ({model_info})[/dim]")
     console.print("[dim]Downloading model files (this may take a few minutes on first run)...[/dim]\n")
 
@@ -151,7 +188,7 @@ def load_model(device: str, model_size: str = "large"):
         console.print(f"[bold green]✓[/bold green] Model loaded successfully on [bold]{device}[/bold]")
 
     except KeyboardInterrupt:
-        console.print("\n[yellow]⚠️  Model loading cancelled by user[/yellow]")
+        console.print("\n[yellow]! Model loading cancelled by user[/yellow]")
         raise  # Re-raise to be caught by main()
 
     return model, processor
@@ -182,7 +219,7 @@ def transcribe_audio(audio_file: Path, output_file: Path, language: str = None, 
         sys.exit(1)
 
     # Create pipeline
-    console.print("\n[bold cyan]🔧 Creating transcription pipeline...[/bold cyan]")
+    console.print("\n[bold cyan]Creating transcription pipeline...[/bold cyan]")
 
     pipe = pipeline(
         "automatic-speech-recognition",
@@ -190,9 +227,7 @@ def transcribe_audio(audio_file: Path, output_file: Path, language: str = None, 
         tokenizer=processor.tokenizer,
         feature_extractor=processor.feature_extractor,
         max_new_tokens=128,
-        chunk_length_s=30,
-        batch_size=16,
-        return_timestamps=False,
+        return_timestamps=True,
         dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
         device=device,
     )
@@ -206,20 +241,37 @@ def transcribe_audio(audio_file: Path, output_file: Path, language: str = None, 
         if converted_audio != audio_file:
             temp_file = converted_audio  # Mark for cleanup later
 
+        # Get audio duration
+        audio_duration = get_audio_duration(audio_file)
+        duration_str = format_duration(audio_duration) if audio_duration > 0 else "unknown"
+
         # Transcribe
-        console.print(f"\n[bold cyan]🎵 Transcribing audio file...[/bold cyan]")
+        console.print(f"\n[bold cyan]Transcribing audio file...[/bold cyan]")
         console.print(f"[dim]Input: {audio_file}[/dim]")
+        console.print(f"[dim]Duration: {duration_str}[/dim]")
+
+        # Estimate processing time (CPU is typically 2-5x slower than real-time)
+        if audio_duration > 0:
+            if device == "cpu":
+                est_time_min = int(audio_duration * 2 / 60)
+                est_time_max = int(audio_duration * 5 / 60)
+                console.print(f"[dim]Estimated time: ~{est_time_min}-{est_time_max} minutes (on CPU)[/dim]")
+            else:
+                est_time_sec = int(audio_duration / 10)
+                console.print(f"[dim]Estimated time: ~{est_time_sec} seconds (with GPU)[/dim]")
 
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
             TimeElapsedColumn(),
             console=console
         ) as progress:
-            task = progress.add_task("Processing audio...", total=None)
+            task = progress.add_task(
+                f"Processing {duration_str} of audio... (this may take a while)",
+                total=None
+            )
 
-            generate_kwargs = {}
+            generate_kwargs = {"task": "transcribe"}
             if language:
                 generate_kwargs["language"] = language
 
@@ -227,10 +279,14 @@ def transcribe_audio(audio_file: Path, output_file: Path, language: str = None, 
 
             progress.update(task, completed=True)
 
-        transcription = result["text"]
+        # Extract text from result (may include timestamps)
+        if isinstance(result, dict) and "text" in result:
+            transcription = result["text"]
+        else:
+            transcription = str(result)
 
         # Save to file
-        console.print(f"\n[bold cyan]💾 Saving transcription...[/bold cyan]")
+        console.print(f"\n[bold cyan]Saving transcription...[/bold cyan]")
         output_file.write_text(transcription, encoding='utf-8')
 
         console.print(f"[bold green]✓[/bold green] Transcription saved to: {output_file}")
@@ -241,7 +297,7 @@ def transcribe_audio(audio_file: Path, output_file: Path, language: str = None, 
         if len(transcription) > preview_length:
             preview += "..."
 
-        console.print("\n[bold cyan]📝 Preview:[/bold cyan]")
+        console.print("\n[bold cyan]Preview:[/bold cyan]")
         console.print(Panel(
             preview,
             box=box.ROUNDED,
@@ -254,10 +310,10 @@ def transcribe_audio(audio_file: Path, output_file: Path, language: str = None, 
         char_count = len(transcription)
         console.print(f"\n[dim]Stats: {word_count} words, {char_count} characters[/dim]")
 
-        console.print("\n[bold green]✨ Transcription completed successfully![/bold green]\n")
+        console.print("\n[bold green]Transcription completed successfully![/bold green]\n")
 
     except KeyboardInterrupt:
-        console.print("\n\n[yellow]⚠️  Transcription cancelled by user[/yellow]")
+        console.print("\n\n[yellow]! Transcription cancelled by user[/yellow]")
         console.print("[dim]Cleaning up...[/dim]\n")
         raise  # Re-raise to be caught by main()
     except Exception as e:
@@ -274,7 +330,7 @@ def transcribe_audio(audio_file: Path, output_file: Path, language: str = None, 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="🎙️  Transcribe audio files using Whisper",
+        description="Transcribe audio files using Whisper",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -323,7 +379,7 @@ Available models:
     try:
         transcribe_audio(args.input_file, args.output_file, args.language, args.model)
     except KeyboardInterrupt:
-        console.print("\n\n[yellow]⚠️  Operation cancelled by user[/yellow]")
+        console.print("\n\n[yellow]! Operation cancelled by user[/yellow]")
         console.print("[dim]Exiting gracefully...[/dim]\n")
         sys.exit(130)  # Standard exit code for SIGINT
 
@@ -332,6 +388,6 @@ if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        console.print("\n\n[yellow]⚠️  Operation cancelled by user[/yellow]")
+        console.print("\n\n[yellow]! Operation cancelled by user[/yellow]")
         console.print("[dim]Exiting gracefully...[/dim]\n")
         sys.exit(130)
