@@ -88,23 +88,38 @@ def load_config() -> dict:
     """
     import yaml
     
-    config_path = Path(__file__).parent / "config.yaml"
     config = DEFAULT_CONFIG.copy()
     
-    if config_path.exists():
-        try:
-            with open(config_path, 'r', encoding='utf-8') as f:
-                user_config = yaml.safe_load(f)
-            
-            if user_config:
-                # Deep merge user config with defaults
-                for section in DEFAULT_CONFIG:
-                    if section in user_config and isinstance(user_config[section], dict):
-                        config[section] = {**DEFAULT_CONFIG[section], **user_config[section]}
-        except Exception as e:
-            console.print(f"[yellow]Warning: Could not load config.yaml: {e}[/yellow]")
-            console.print("[dim]Using default configuration[/dim]")
+    # 1. App directory config (default/global)
+    app_config_path = Path(__file__).parent / "config.yaml"
     
+    # 2. User home config (~/.whisp/config.yaml)
+    home_config_path = Path.home() / ".whisp" / "config.yaml"
+    
+    # Load in order of priority (lowest to highest)
+    config_paths = [
+        (app_config_path, "App"),
+        (home_config_path, "Home")
+    ]
+    
+    for path, source in config_paths:
+        if path.exists():
+            try:
+                with open(path, 'r', encoding='utf-8') as f:
+                    user_config = yaml.safe_load(f)
+                
+                if user_config:
+                    # Deep merge user config with defaults/previous
+                    for section in DEFAULT_CONFIG:
+                        if section in user_config and isinstance(user_config[section], dict):
+                            config[section] = {**config.get(section, DEFAULT_CONFIG[section]), **user_config[section]}
+                    
+                    # console might not be fully initialized or we want to be subtle, 
+                    # but since console is global, we can try using it if we really want debug info
+                    # For now, silent success is best, unless debugging.
+            except Exception as e:
+                console.print(f"[yellow]Warning: Could not load {source} config ({path}): {e}[/yellow]")
+
     return config
 
 # Load configuration at startup
@@ -478,7 +493,7 @@ def load_model(device: str, model_size: str = "large"):
     return model
 
 
-def transcribe_audio(audio_file: Path, output_file: Path, language: str = None, model_size: str = "large"):
+def transcribe_audio(audio_file: Path, output_file: Path, language: str = None, model_size: str = "large", show_save_message: bool = True):
     """Transcribe audio file to text (displayed as batch mode with 1 file)"""
     from rich.table import Table
     from rich.live import Live
@@ -489,8 +504,8 @@ def transcribe_audio(audio_file: Path, output_file: Path, language: str = None, 
     if not check_file_exists(audio_file):
         sys.exit(1)
 
-    console.print(f"\n[dim]Input: {audio_file}[/dim]")
-    console.print(f"[dim]Output: {output_file}[/dim]")
+    console.print(f"\n[dim]Input: {audio_file.resolve()}[/dim]")
+    console.print(f"[dim]Output: {output_file.resolve()}[/dim]")
 
     # Determine device
     try:
@@ -587,9 +602,7 @@ def transcribe_audio(audio_file: Path, output_file: Path, language: str = None, 
             refresh_thread.join(timeout=1)
 
     # Save transcription
-    console.print(f"\n[bold cyan]Saving transcription...[/bold cyan]")
     output_file.write_text(transcription, encoding='utf-8')
-    console.print(f"[bold green]✓[/bold green] Saved to: {output_file}")
 
     # Display preview
     preview_length = CONFIG["output"]["preview_length"]
@@ -621,7 +634,9 @@ def transcribe_audio(audio_file: Path, output_file: Path, language: str = None, 
     stats_table.add_row("Characters", f"{char_count:,}")
     console.print(stats_table)
 
-    console.print("\n[bold green]Transcription completed successfully![/bold green]\n")
+    if show_save_message:
+        console.print("\n[bold green]Transcription completed successfully[/bold green]")
+        console.print(f"[dim]└──[/dim] Transcription saved to: {output_file.resolve()}")
 
 
 # =============================================================================
@@ -1208,24 +1223,42 @@ def record_and_transcribe(
     # Generate base filename for consistent naming between audio and txt
     base_filename = f"recording_{timestamp}"
 
+    success = False
     try:
         # Record with manual start/stop
         temp_wav_path = record_audio_interactive(device_index, base_filename=base_filename)
 
-        # Step 3: Transcribe (reuse existing function!)
+        # Step 3: Transcribe (reuse existing function with silent save)
         console.print("\n[cyan]Recording complete! Starting transcription...[/cyan]")
-        transcribe_audio(temp_wav_path, output_file, language, model_size)
+        transcribe_audio(temp_wav_path, output_file, language, model_size, show_save_message=False)
+        success = True
 
-    finally:
-        # Step 4: Cleanup
+    except Exception:
+        # On failure, still notify if recording is kept
         if temp_wav_path and temp_wav_path.exists():
             if CONFIG["recording"].get("keep_recording", False):
-                console.print(f"\n[bold green]✓[/bold green] [bold cyan]Recording saved:[/bold cyan] [green]{temp_wav_path}[/green]")
-            else:
+                console.print(f"\n[bold cyan]Saving recording...[/bold cyan]")
+                console.print(f"[bold green]✓[/bold green] Saved to: {temp_wav_path.resolve()}")
+        raise
+
+    finally:
+        # Step 4: Cleanup (only delete if NOT keeping)
+        if temp_wav_path and temp_wav_path.exists():
+            if not CONFIG["recording"].get("keep_recording", False):
                 try:
                     os.unlink(temp_wav_path)
                 except:
                     pass  # Ignore cleanup errors
+
+    # Print consolidated summary on success
+    if success:
+        console.print("\n[bold green]Transcription completed successfully[/bold green]")
+        
+        if CONFIG["recording"].get("keep_recording", False):
+            console.print(f"[dim]├──[/dim] Recording saved to: {temp_wav_path.resolve()}")
+            console.print(f"[dim]└──[/dim] Transcription saved to: {output_file.resolve()}")
+        else:
+            console.print(f"[dim]└──[/dim] Transcription saved to: {output_file.resolve()}")
 
 
 # =============================================================================
@@ -1317,8 +1350,8 @@ def transcribe_batch(input_dir: Path, output_file: Path, language: str = None, m
     
     # Print batch mode header
     console.print("\n[bold magenta]📦 BATCH MODE[/bold magenta]")
-    console.print(f"[dim]Directory: {input_dir}[/dim]")
-    console.print(f"[dim]Output: {output_file}[/dim]")
+    console.print(f"[dim]Directory: {input_dir.resolve()}[/dim]")
+    console.print(f"[dim]Output: {output_file.resolve()}[/dim]")
     
     # Calculate total duration
     total_duration = 0.0
@@ -1444,7 +1477,7 @@ def transcribe_batch(input_dir: Path, output_file: Path, language: str = None, m
     combined_text = "\n\n".join(all_transcriptions).strip()
     output_file.write_text(combined_text, encoding='utf-8')
     
-    console.print(f"[bold green]✓[/bold green] Saved to: {output_file}")
+    console.print(f"[bold green]✓[/bold green] Saved to: {output_file.resolve()}")
     
     # Final stats
     # Calculate total processing time and speed
@@ -1549,13 +1582,12 @@ Modes:
             if output_file is None:
                 # Auto-generate output filename based on input
                 if input_path.is_dir():
-                    # Batch mode: use directory name
+                    # Batch mode: use directory name, save alongside directory
                     base_name = input_path.name or "transcription"
-                    output_file = Path(f"{base_name}.txt")
+                    output_file = input_path.parent / f"{base_name}.txt"
                 else:
-                    # Single file mode: use input filename
-                    base_name = input_path.stem  # filename without extension
-                    output_file = Path(f"{base_name}.txt")
+                    # Single file mode: use input filename (same directory)
+                    output_file = input_path.with_suffix(".txt")
 
             if input_path.is_dir():
                 # Batch mode

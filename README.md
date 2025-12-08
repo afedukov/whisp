@@ -14,17 +14,19 @@ Fast and accurate audio transcription CLI powered by [OpenAI Whisper Large-v3](h
 
 ```bash
 # Transcribe a single file
-python whisp.py audio.mp3                # → audio.txt
+whisp audio.mp3                          # → audio.txt
 
 # Record and transcribe
-python whisp.py record                   # → output/recording_TIMESTAMP.txt
+whisp record                             # → output/recording_TIMESTAMP.txt
 
 # Batch process folder
-python whisp.py ./recordings/            # → recordings.txt
+whisp ./recordings/                      # → recordings.txt
 
 # With specific model and language
-python whisp.py audio.mp3 --model large --language de
+whisp audio.mp3 --model large --language de
 ```
+
+> 💡 **Note:** If you installed with `pip install -r requirements.txt` instead of `pip install -e .`, use `python whisp.py` instead of `whisp`
 
 ## ✨ Full Feature List
 
@@ -124,8 +126,15 @@ source venv/bin/activate
 venv\Scripts\activate
 ```
 
-### 4. Install dependencies
+### 4. Install the package
 
+**Option A: Install as editable package (recommended for development)**
+```bash
+pip install --upgrade pip
+pip install -e .
+```
+
+**Option B: Install from requirements.txt (use `python whisp.py`)**
 ```bash
 pip install --upgrade pip
 pip install -r requirements.txt
@@ -136,9 +145,34 @@ This will install:
 - `ctranslate2` - Inference engine for transformer models
 - `rich` - Beautiful terminal formatting
 - `huggingface-hub` - Model downloading with resumable transfers
+- `sounddevice` - Microphone recording
 - Other required dependencies
 
 > ⚠️ **Note:** The first run will take some time as the Whisper model (~3GB for large) will be downloaded. The model is cached locally for future use. Downloads can be interrupted and resumed.
+
+### 5. Using the `whisp` command
+
+After installing with **Option A** (`pip install -e .`), you can use the `whisp` command from anywhere:
+
+```bash
+whisp audio.mp3              # Instead of: python whisp.py audio.mp3
+whisp record                 # Instead of: python whisp.py record
+whisp ./recordings/          # Instead of: python whisp.py ./recordings/
+```
+
+If you used **Option B**, use `python whisp.py` instead.
+
+### Creating a permanent alias (Optional)
+
+To run `whisp` from any directory without manually activating the virtual environment every time, you can add an alias to your shell configuration (e.g., `~/.zshrc`).
+
+Run this command from the project root directory:
+
+```bash
+echo "alias whisp=\"$(pwd)/venv/bin/whisp\"" >> ~/.zshrc
+source ~/.zshrc
+```
+
 
 ## 💻 Usage
 
@@ -146,26 +180,26 @@ This will install:
 
 **Basic usage:**
 ```bash
-python whisp.py input.mp3 output.txt
-python whisp.py input.mp3                    # Auto-generates input.txt
+whisp input.mp3 output.txt
+whisp input.mp3                    # Auto-generates input.txt
 ```
 
 **With model and language specification:**
 ```bash
-python whisp.py audio.wav transcript.txt --model large --language en
-python whisp.py audio.wav --model turbo      # Auto-generates audio.txt
+whisp audio.wav transcript.txt --model large --language en
+whisp audio.wav --model turbo      # Auto-generates audio.txt
 ```
 
 **Example commands:**
 ```bash
 # German lecture with maximum accuracy
-python whisp.py lecture.mp3 --model large --language de
+whisp lecture.mp3 --model large --language de
 
 # Fast podcast transcription
-python whisp.py podcast.m4a --model turbo --language en
+whisp podcast.m4a --model turbo --language en
 
 # Auto-detect language with medium model
-python whisp.py interview.mp3 --model medium
+whisp interview.mp3 --model medium
 ```
 
 ### Model Selection
@@ -187,14 +221,14 @@ Record audio from your microphone and transcribe it automatically.
 
 **Basic recording:**
 ```bash
-python whisp.py record output.txt
-python whisp.py record                          # Auto-saves to save_dir/recording_TIMESTAMP.txt
+whisp record output.txt
+whisp record                          # Auto-saves to save_dir/recording_TIMESTAMP.txt
 ```
 
 **Recording with specific model and language:**
 ```bash
-python whisp.py record transcript.txt --model turbo --language de
-python whisp.py record --model turbo --language de  # Auto-generates filename
+whisp record transcript.txt --model turbo --language de
+whisp record --model turbo --language de  # Auto-generates filename
 ```
 
 **How it works:**
@@ -229,8 +263,8 @@ Process entire folders of audio files. All files are processed in **natural sort
 
 **Basic batch processing:**
 ```bash
-python whisp.py ./lectures/ combined_transcript.txt --language de --model turbo
-python whisp.py ./recordings/                    # Auto-generates recordings.txt
+whisp ./lectures/ combined_transcript.txt --language de --model turbo
+whisp ./recordings/                    # Auto-generates recordings.txt
 ```
 
 **Batch mode features:**
@@ -253,6 +287,10 @@ python whisp.py --help
 ## ⚙️ Configuration
 
 The application can be configured via `config.yaml` file. All settings have sensible defaults.
+    
+    **Configuration Loading Order (Priority High to Low):**
+    1. `~/.whisp/config.yaml` in user home directory (User global)
+    2. `config.yaml` in application directory (Default)
 
 ### Transcription Settings
 - `default_language`: Auto-detect if empty, or specify (e.g., "en", "de", "ru")
