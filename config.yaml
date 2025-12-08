@@ -85,7 +85,7 @@ recording:
   #   "BlackHole"             → Auto-use device by partial name match
   #   4                       → Auto-use device by index (unreliable, may change!)
   # To see available devices, run: python whisp.py record
-  default_device: -1
+  default_device: "BlackHole"
 
   # Show audio level meter during recording (requires more CPU)
   show_level_meter: true
