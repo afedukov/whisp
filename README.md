@@ -1,4 +1,4 @@
-# 🎙️ Whisper Transcription Tool
+# 🎙️ Whisper
 
 Beautiful command-line application for transcribing audio files using [OpenAI Whisper Large-v3](https://huggingface.co/openai/whisper-large-v3) model.
 
@@ -11,10 +11,11 @@ Powered by [faster-whisper](https://github.com/SYSTRAN/faster-whisper) for **4-8
 - 🚀 GPU (CUDA) support for accelerated processing
 - 💾 Lower memory usage with int8 quantization on CPU
 - 🌍 Automatic language detection or manual language specification
-- 📊 Beautiful progress indicators in Claude Code style
+- 📊 Beautiful progress indicators with Rich
 - 📝 Preview of transcription results
-- 🔄 Multiple model options (large, turbo, medium, small)
+- 🔄 Multiple model options (large, distil, medium, small, base)
 - 🎤 Voice activity detection (VAD) to skip silence
+- 📥 Resumable model downloads with progress bar
 
 ## 🎵 Supported Audio Formats
 
@@ -107,9 +108,10 @@ This will install:
 - `faster-whisper` - Optimized Whisper implementation (4-8x faster)
 - `ctranslate2` - Inference engine for transformer models
 - `rich` - Beautiful terminal formatting
+- `huggingface-hub` - Model downloading with resumable transfers
 - Other required dependencies
 
-> ⚠️ **Note:** The first run will take some time as the Whisper model (~3GB for large) will be downloaded. The model is cached locally for future use.
+> ⚠️ **Note:** The first run will take some time as the Whisper model (~3GB for large) will be downloaded. The model is cached locally for future use. Downloads can be interrupted and resumed.
 
 ## 💻 Usage
 
@@ -127,14 +129,15 @@ python whisp.py audio.wav transcript.txt --model large --language en
 
 ### Model Selection
 
-4 Whisper models are available:
+5 Whisper models are available:
 
 | Model | Size | Accuracy | Speed | Recommendation |
 |-------|------|----------|-------|----------------|
 | **large** | ~3GB | Best | Slow | ✅ Default, for academic content |
-| **turbo** | ~1.5GB | Same as large | 8x faster | ⚡ Recommended for most tasks |
+| **distil** | ~1.5GB | Good | 6x faster | ⚡ English-optimized, fast |
 | **medium** | ~1.5GB | Good | 2-3x faster | ⚖️ Balance of speed and quality |
 | **small** | ~466MB | Basic | Fast | 🚀 For simple tasks |
+| **base** | ~145MB | Basic | Very fast | 🏃 Minimal accuracy |
 
 ### Examples
 
@@ -143,14 +146,19 @@ python whisp.py audio.wav transcript.txt --model large --language en
 python whisp.py lecture.mp3 transcript.txt --model large --language de
 ```
 
-**Fast podcast transcription:**
+**Fast English podcast transcription:**
 ```bash
-python whisp.py podcast.m4a transcript.txt --model turbo --language en
+python whisp.py podcast.m4a transcript.txt --model distil --language en
 ```
 
-**Automatic language detection:**
+**Good balance for any language:**
 ```bash
 python whisp.py interview.mp3 interview_text.txt --model medium
+```
+
+**Quick test with basic accuracy:**
+```bash
+python whisp.py test.mp3 test.txt --model base
 ```
 
 ### Command help
@@ -163,15 +171,19 @@ python whisp.py --help
 
 ```
 ╭─────────────────────────────────────────╮
-│ Whisper Transcription Tool              │
-│ Powered by OpenAI whisper-large-v3      │
+│ Whisper                                 │
+│ Powered by OpenAI large-v3              │
 ╰─────────────────────────────────────────╯
 
 Device: cpu
 
 Initializing Whisper model...
-Model: turbo (Best accuracy, ~3GB (uses large-v3 with optimizations))
+Model: medium (Good balance, ~1.5GB)
 Using faster-whisper for optimized performance
+Downloading model 'Systran/faster-whisper-medium'...
+Downloading model... ████████████████████████████████████████ 100% • 1.5/1.5 GB • 5.2 MB/s • 00:00:00
+✓ Model downloaded successfully
+Loading model with compute type 'int8'...
 ✓ Model loaded successfully on cpu
 Compute type: int8
 
@@ -219,10 +231,11 @@ Thanks to `faster-whisper` with CTranslate2 and int8 quantization:
 
 ### Model Selection Recommendations
 
-- **large** - use for academic lectures, medical recordings, technical documentation
-- **turbo** - optimal choice for most tasks: podcasts, interviews, meetings
-- **medium** - for fast processing of simple content on weaker machines
-- **small** - only for simple recordings with good audio quality
+- **large** - use for academic lectures, medical recordings, technical documentation (any language)
+- **distil** - optimal choice for English content: podcasts, interviews, meetings
+- **medium** - good balance for any language on moderate hardware
+- **small** - for simple recordings with good audio quality
+- **base** - quick tests or very simple content
 
 ### Supported Languages
 
@@ -304,6 +317,10 @@ To use GPU acceleration, you may need to install CUDA-enabled dependencies. Chec
 ```bash
 python -c "import torch; print(torch.cuda.is_available())"
 ```
+
+### Interrupted model download
+
+If your model download was interrupted, simply run the script again. Downloads are resumable — only missing files will be downloaded.
 
 ## 📦 Project Structure
 

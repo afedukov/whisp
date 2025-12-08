@@ -172,14 +172,15 @@ def convert_audio_to_wav(audio_file: Path) -> Path:
 
 
 def download_model_with_progress(model_id: str) -> str:
-    """Download model from HuggingFace Hub with progress bar, return local path.
+    """Download model from HuggingFace Hub with beautiful progress bar.
     
-    Uses snapshot_download which automatically:
-    - Resumes interrupted downloads
-    - Verifies file integrity via checksums
-    - Uses cached files if already downloaded
+    Uses hf_hub_download for each file with rich progress tracking.
+    Automatically resumes interrupted downloads and verifies integrity.
     """
-    from huggingface_hub import snapshot_download
+    from huggingface_hub import hf_hub_download, list_repo_files, try_to_load_from_cache
+    from huggingface_hub.constants import HF_HUB_CACHE
+    from rich.progress import Progress, BarColumn, DownloadColumn, TransferSpeedColumn, TimeRemainingColumn, TaskID
+    import threading
     
     # Map faster-whisper model names to HuggingFace repo names
     repo_map = {
@@ -192,19 +193,116 @@ def download_model_with_progress(model_id: str) -> str:
     
     repo_id = repo_map.get(model_id, f"Systran/faster-whisper-{model_id}")
     
-    console.print(f"[cyan]Checking model '{repo_id}'...[/cyan]")
+    # Check if model is already fully cached
+    cache_dir = Path(HF_HUB_CACHE)
+    repo_folder = cache_dir / f"models--{repo_id.replace('/', '--')}"
     
-    # Download with progress (will use cache if complete, resume if partial)
     try:
-        local_path = snapshot_download(
-            repo_id=repo_id,
-            local_files_only=False,
-        )
-        console.print(f"[green]✓[/green] Model ready")
-        return local_path
-    except Exception as e:
-        console.print(f"[bold red]✗[/bold red] Failed to download model: {str(e)}")
-        raise
+        # Get list of files in the repo
+        files = list_repo_files(repo_id)
+        
+        # Check if all files are cached
+        all_cached = True
+        for filename in files:
+            cached = try_to_load_from_cache(repo_id, filename)
+            if cached is None:
+                all_cached = False
+                break
+        
+        if all_cached:
+            console.print(f"[green]✓[/green] Model '{model_id}' found in cache")
+            # Return the snapshot path
+            snapshots_dir = repo_folder / "snapshots"
+            if snapshots_dir.exists():
+                snapshots = list(snapshots_dir.iterdir())
+                if snapshots:
+                    return str(snapshots[0])
+    except Exception:
+        pass  # Continue with download
+    
+    console.print(f"[cyan]Downloading model '{repo_id}'...[/cyan]")
+    
+    # Custom progress bar in app style
+    with Progress(
+        "[progress.description]{task.description}",
+        BarColumn(bar_width=40),
+        "[progress.percentage]{task.percentage:>3.0f}%",
+        "•",
+        DownloadColumn(),
+        "•",
+        TransferSpeedColumn(),
+        "•",
+        TimeRemainingColumn(),
+        console=console,
+        transient=False,
+    ) as progress:
+        
+        # Get file list and sizes
+        try:
+            from huggingface_hub import HfApi
+            api = HfApi()
+            repo_info = api.repo_info(repo_id, files_metadata=True)
+            
+            # Calculate total size
+            file_sizes = {}
+            total_size = 0
+            for sibling in repo_info.siblings:
+                if sibling.size:
+                    file_sizes[sibling.rfilename] = sibling.size
+                    total_size += sibling.size
+            
+            # Create main progress task
+            main_task = progress.add_task(
+                f"[cyan]Downloading model...",
+                total=total_size
+            )
+            
+            downloaded_size = 0
+            local_path = None
+            
+            # Download each file
+            for filename in file_sizes:
+                file_size = file_sizes[filename]
+                
+                # Check if already cached
+                cached = try_to_load_from_cache(repo_id, filename)
+                if cached:
+                    downloaded_size += file_size
+                    progress.update(main_task, completed=downloaded_size)
+                    continue
+                
+                # Download with progress callback
+                def progress_callback(current: int, total: int):
+                    progress.update(main_task, completed=downloaded_size + current)
+                
+                local_path = hf_hub_download(
+                    repo_id=repo_id,
+                    filename=filename,
+                    # Note: hf_hub_download doesn't have a progress callback,
+                    # but it shows tqdm which we've configured to use rich
+                )
+                
+                downloaded_size += file_size
+                progress.update(main_task, completed=downloaded_size)
+            
+            progress.update(main_task, completed=total_size)
+            
+        except Exception as e:
+            progress.stop()
+            console.print(f"[yellow]! Could not get file sizes, using simple download...[/yellow]")
+            # Fallback to simple download
+            from huggingface_hub import snapshot_download
+            local_path = snapshot_download(repo_id=repo_id, local_files_only=False)
+    
+    # Get the snapshot path
+    snapshots_dir = repo_folder / "snapshots"
+    if snapshots_dir.exists():
+        snapshots = list(snapshots_dir.iterdir())
+        if snapshots:
+            console.print(f"[green]✓[/green] Model downloaded successfully")
+            return str(snapshots[0])
+    
+    raise RuntimeError(f"Failed to find downloaded model in cache: {repo_folder}")
 
 
 def load_model(device: str, model_size: str = "large"):
@@ -388,7 +486,7 @@ Examples:
   %(prog)s podcast.m4a transcript.txt --model medium --language ru
 
 Available models:
-  large  - Best accuracy, ~3GB (default, recommended for academic content)
+  large  - Best accuracy, ~3GB
   distil - Distilled large-v3, ~1.5GB, 6x faster (English-optimized)
   medium - Good balance, ~1.5GB, 2-3x faster than large
   small  - Fast, ~466MB, lower accuracy
