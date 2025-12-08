@@ -907,12 +907,20 @@ def record_audio_interactive(device_index: int) -> Path:
     # Recording state
     recording_data = []
     stop_event = threading.Event()
+    current_level = [0.0]  # Current audio level (0.0 to 1.0)
 
     def audio_callback(indata, frames, time_info, status):
         """Called by sounddevice for each audio block"""
         if status:
             console.print(f"[yellow]Status: {status}[/yellow]")
         recording_data.append(indata.copy())
+
+        # Calculate RMS level for visualization
+        if config.get("show_level_meter", True):
+            # Convert int16 to float and calculate RMS
+            audio_float = indata.astype(np.float32) / 32768.0
+            rms = np.sqrt(np.mean(audio_float ** 2))
+            current_level[0] = min(rms * 3.0, 1.0)  # Scale and clamp to [0, 1]
 
     # No separate input thread needed - we'll check in the main loop
 
@@ -980,13 +988,36 @@ def record_audio_interactive(device_index: int) -> Path:
                         dot = pulse_states[pulse_idx % len(pulse_states)]
                         pulse_idx += 1
 
+                        # Build panel content
+                        panel_content = f"{dot} [bold]RECORDING[/bold]\n"
+                        panel_content += f"[dim]Duration: {duration_str}[/dim]\n"
+                        panel_content += f"[dim]File size: {file_size_str}[/dim]\n"
+
+                        # Add level meter if enabled
+                        if config.get("show_level_meter", True):
+                            level = current_level[0]
+
+                            # Progress bar ████░░░░
+                            bar_length = 30
+                            filled = int(level * bar_length)
+                            if level > 0.9:
+                                bar_color = "red"
+                            elif level > 0.7:
+                                bar_color = "yellow"
+                            else:
+                                bar_color = "green"
+
+                            progress_bar = f"[{bar_color}]{'█' * filled}[/{bar_color}]"
+                            progress_bar += f"[dim]{'░' * (bar_length - filled)}[/dim]"
+
+                            panel_content += f"\n[dim]Level:[/dim] {progress_bar}\n"
+
+                        panel_content += f"\n[dim]Press Ctrl+D to stop[/dim]"
+
                         # Update live display
                         live.update(
                             Panel(
-                                f"{dot} [bold]RECORDING[/bold]\n"
-                                f"[dim]Duration: {duration_str}[/dim]\n"
-                                f"[dim]File size: {file_size_str}[/dim]\n\n"
-                                f"[dim]Press Ctrl+D to stop[/dim]",
+                                panel_content,
                                 border_style="red",
                                 box=box.ROUNDED
                             )
