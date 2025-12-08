@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "whisp"
+version = "1.0.0"
+description = "Fast audio transcription CLI powered by OpenAI Whisper"
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "ctranslate2>=4.0.0",
+    "tokenizers>=0.13.0",
+    "huggingface-hub>=0.13.0",
+    "faster-whisper>=1.0.0",
+    "soundfile>=0.12.1",
+    "numpy>=1.24.0",
+    "sounddevice>=0.4.6",
+    "rich>=13.0.0",
+    "simple-term-menu>=1.6.0",
+    "pyyaml>=6.0",
+]
+
+[project.scripts]
+whisp = "whisp:main"
+
+[tool.setuptools]
+py-modules = ["whisp"]
