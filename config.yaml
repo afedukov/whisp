@@ -10,12 +10,13 @@
 # =============================================================================
 model:
   # Default Whisper model to use for transcription
-  # Options: turbo, large, medium, small, base
-  #   - turbo:  ~800MB, 8x faster than large, good accuracy, multilingual (recommended)
-  #   - large:  ~3GB, best accuracy, slower processing
-  #   - medium: ~1.5GB, good balance of speed and accuracy
-  #   - small:  ~466MB, fast but lower accuracy
-  #   - base:   ~145MB, very fast, basic accuracy
+  # Options: turbo, large, large-v2, medium, small, base
+  #   - turbo:    ~800MB, 8x faster than large, good accuracy, multilingual (recommended)
+  #   - large:    ~3GB, best accuracy (latest v3), slower processing
+  #   - large-v2: ~3GB, previous large version, slightly faster than v3
+  #   - medium:   ~1.5GB, good balance of speed and accuracy
+  #   - small:    ~466MB, fast but lower accuracy
+  #   - base:     ~145MB, very fast, basic accuracy
   default: "turbo"
 
   # Compute type for CPU inference

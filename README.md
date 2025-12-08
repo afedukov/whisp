@@ -129,24 +129,30 @@ python whisp.py audio.wav transcript.txt --model large --language en
 
 ### Model Selection
 
-5 Whisper models are available:
+6 Whisper models are available:
 
 | Model | Size | Accuracy | Speed | Recommendation |
 |-------|------|----------|-------|----------------|
 | **turbo** | ~800MB | Good | 8x faster | ✅ Default, fast multilingual |
-| **large** | ~3GB | Best | Slow | 🎓 For academic content |
+| **large** | ~3GB | Best | Slow | 🎓 For academic content (latest v3) |
+| **large-v2** | ~3GB | Best | Slightly faster | 🔄 Previous large version |
 | **medium** | ~1.5GB | Good | 2-3x faster | ⚖️ Balance of speed and quality |
 | **small** | ~466MB | Basic | Fast | 🚀 For simple tasks |
 | **base** | ~145MB | Basic | Very fast | 🏃 Minimal accuracy |
 
 ### Examples
 
-**German lecture (maximum accuracy):**
+**German lecture (maximum accuracy with latest model):**
 ```bash
 python whisp.py lecture.mp3 transcript.txt --model large --language de
 ```
 
-**Fast English podcast transcription:**
+**German lecture (maximum accuracy with large-v2):**
+```bash
+python whisp.py lecture.mp3 transcript.txt --model large-v2 --language de
+```
+
+**Fast podcast transcription:**
 ```bash
 python whisp.py podcast.m4a transcript.txt --model turbo --language de
 ```
@@ -281,7 +287,8 @@ Thanks to `faster-whisper` with CTranslate2 and int8 quantization:
 
 ### Model Selection Recommendations
 
-- **large** - use for academic lectures, medical recordings, technical documentation (any language)
+- **large** - latest v3 model, use for academic lectures, medical recordings, technical documentation (any language)
+- **large-v2** - previous large version, slightly faster than v3, similar accuracy
 - **turbo** - optimal for fast transcription with good accuracy (any language)
 - **medium** - good balance for any language on moderate hardware
 - **small** - for simple recordings with good audio quality

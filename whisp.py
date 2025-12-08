@@ -39,6 +39,7 @@ console = Console()
 # Available Whisper models (faster-whisper uses model size names directly)
 WHISPER_MODELS = {
     "large": "large-v3",
+    "large-v2": "large-v2",
     "turbo": "large-v3-turbo",  # 8x faster than large-v3, multilingual (de, en, ru, etc.)
     "medium": "medium",
     "small": "small",
@@ -47,6 +48,7 @@ WHISPER_MODELS = {
 
 MODEL_INFO = {
     "large": "Best accuracy, ~3GB",
+    "large-v2": "Previous large version, ~3GB, slightly faster",
     "turbo": "Large-v3-turbo, ~800MB, 8x faster, multilingual",
     "medium": "Good balance, ~1.5GB",
     "small": "Fast, ~466MB, lower accuracy",
@@ -773,11 +775,12 @@ Examples:
     %(prog)s /path/to/lectures/ transcript.txt --model medium
 
 Available models:
-  turbo  - Large-v3-turbo, ~800MB, 8x faster, multilingual (default)
-  large  - Best accuracy, ~3GB
-  medium - Good balance, ~1.5GB, 2-3x faster than large
-  small  - Fast, ~466MB, lower accuracy
-  base   - Very fast, ~145MB, basic accuracy
+  turbo    - Large-v3-turbo, ~800MB, 8x faster, multilingual (default)
+  large    - Best accuracy (v3), ~3GB
+  large-v2 - Previous large version, ~3GB, slightly faster
+  medium   - Good balance, ~1.5GB, 2-3x faster than large
+  small    - Fast, ~466MB, lower accuracy
+  base     - Very fast, ~145MB, basic accuracy
 
 Batch mode:
   When input is a directory, all audio files are processed in natural
@@ -800,7 +803,7 @@ Batch mode:
     parser.add_argument(
         "--model",
         type=str,
-        choices=["large", "turbo", "medium", "small", "base"],
+        choices=["large", "large-v2", "turbo", "medium", "small", "base"],
         default="turbo",
         help="Whisper model size (default: turbo)"
     )
