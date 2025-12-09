@@ -113,27 +113,39 @@ translation:
   openai_api_key: ""
 
   # OpenAI model for translation
-  # Recommended: gpt-4o-mini (fast, cheap, excellent quality - ~$0.015 per 1.5h lecture)
-  # Other options:
-  #   - gpt-4o: ~$0.25 per 1.5h lecture (best quality, expensive)
-  #   - gpt-4-turbo: expensive, not recommended
-  #   - gpt-3.5-turbo: cheaper but lower quality
-  model: "gpt-4o-mini"
+  # Recommended:
+  #   - gpt-5-mini (default, recommended)
+  #   - gpt-5-nano
+  #   - gpt-4o-mini
+  model: "gpt-5-mini"
 
-  # Translation prompt (customizable)
-  # Variables: {source_language}, {target_language}, {text}
-  prompt: |
-    Translate the following text from {source_language} to {target_language}.
+  # Temperature for sampling (creativity vs determinism)
+  # Range: 0.0 to 1.0 (default: 0.3)
+  # Note: Some specialized models (e.g., gpt-5-mini, gpt-5-nano) may require temperature=1.0 or specific values
+  temperature: 1.0
 
-    CRITICAL REQUIREMENTS:
-    1. Translate EVERYTHING - do not omit, shorten, or summarize any content
-    2. Maintain the exact meaning and tone of the original text
-    3. Preserve all technical terms, names, and numbers exactly as they appear
-    4. Do NOT add any explanations, notes, or comments of your own
-    5. Organize the translated text into logical paragraphs based on topic changes and natural breaks in the content
-    6. Keep paragraph structure clear and readable
+  # System prompt: Defines the AI's persona and general behavior
+  system_prompt: "You are a professional translator and editor specializing in academic lectures and public speaking."
 
-    Provide ONLY the translated text, nothing else.
+  # User prompt: The actual instruction and text to translate
+  # Variables available: {source_language}, {target_language}, {text}
+  user_prompt: |
+    Task: Translate the following transcript of a spoken lecture from {source_language} to {target_language}.
+
+    Context: The source text is an automated transcription (ASR) of a speech. It contains phonetic errors, 
+    misheard words, and run-on sentences typical of spoken language.
+
+    Instructions:
+    1.  **Correct & Translate:** Translate the text into natural, fluent {target_language}. If you encounter 
+        obvious transcription errors (words that sound similar but make no sense in context, e.g., "Militärgisse" 
+        or "brille vor Angst"), reconstruct the intended meaning based on the context before translating.
+    2.  **Style & Tone:** Maintain the speaker's rhetorical style (storytelling, engaging, slightly informal 
+        but educational). Avoid word-for-word translation. Rephrase sentences to sound natural in {target_language}, 
+        as if a native speaker were giving the lecture.
+    3.  **Structure:** Organize the text into logical paragraphs to improve readability. Fix punctuation where 
+        the transcript is messy.
+    4.  **Accuracy:** Preserve all names (George Bush, Al Gore, Pat Buchanan), dates, and numbers exactly.
+    5.  **Output:** Provide ONLY the translated text, nothing else.
 
     Text to translate:
     {text}

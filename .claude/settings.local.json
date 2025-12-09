@@ -8,7 +8,8 @@
       "WebSearch",
       "Bash(source:*)",
       "Bash(python -c:*)",
-      "WebFetch(domain:platform.openai.com)"
+      "WebFetch(domain:platform.openai.com)",
+      "WebFetch(domain:docs.aimlapi.com)"
     ],
     "deny": [],
     "ask": []

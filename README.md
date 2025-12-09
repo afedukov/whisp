@@ -370,8 +370,8 @@ The application can be configured via `config.yaml` file. All settings have sens
 
 ### Translation Settings
 - `openai_api_key`: Your OpenAI API key (get at [platform.openai.com/api-keys](https://platform.openai.com/api-keys))
-- `model`: GPT model for translation (default: "gpt-4o-mini" - fast, cheap, ~$0.015 per 1.5h lecture)
-  - Options: gpt-4o-mini (recommended), gpt-4o (best quality, expensive), gpt-3.5-turbo (cheaper but lower quality)
+- `model`: GPT model for translation (default: "gpt-5-mini")
+  - Options: gpt-5-mini (recommended), gpt-5-nano, gpt-4o-mini
 - `prompt`: Customizable translation prompt (default includes strict quality requirements)
 
 ## 🎯 Model Selection Guide

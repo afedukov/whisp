@@ -56,17 +56,26 @@ MODEL_INFO = {
 }
 
 # Default translation prompt for OpenAI API
-DEFAULT_TRANSLATION_PROMPT = """Translate the following text from {source_language} to {target_language}.
+# Default system prompt for translation
+DEFAULT_SYSTEM_PROMPT = "You are a professional translator and editor specializing in academic lectures and public speaking."
 
-CRITICAL REQUIREMENTS:
-1. Translate EVERYTHING - do not omit, shorten, or summarize any content
-2. Maintain the exact meaning and tone of the original text
-3. Preserve all technical terms, names, and numbers exactly as they appear
-4. Do NOT add any explanations, notes, or comments of your own
-5. Organize the translated text into logical paragraphs based on topic changes and natural breaks in the content
-6. Keep paragraph structure clear and readable
+# Default user prompt template
+DEFAULT_USER_PROMPT = """Task: Translate the following transcript of a spoken lecture from {source_language} to {target_language}.
 
-Provide ONLY the translated text, nothing else.
+Context: The source text is an automated transcription (ASR) of a speech. It contains phonetic errors, 
+misheard words, and run-on sentences typical of spoken language.
+
+Instructions:
+1.  **Correct & Translate:** Translate the text into natural, fluent {target_language}. If you encounter 
+    obvious transcription errors (words that sound similar but make no sense in context, e.g., "Militärgisse" 
+    or "brille vor Angst"), reconstruct the intended meaning based on the context before translating.
+2.  **Style & Tone:** Maintain the speaker's rhetorical style (storytelling, engaging, slightly informal 
+    but educational). Avoid word-for-word translation. Rephrase sentences to sound natural in {target_language}, 
+    as if a native speaker were giving the lecture.
+3.  **Structure:** Organize the text into logical paragraphs to improve readability. Fix punctuation where 
+    the transcript is messy.
+4.  **Accuracy:** Preserve all names (George Bush, Al Gore, Pat Buchanan), dates, and numbers exactly.
+5.  **Output:** Provide ONLY the translated text, nothing else.
 
 Text to translate:
 {text}"""
@@ -98,8 +107,10 @@ DEFAULT_CONFIG = {
     },
     "translation": {
         "openai_api_key": "",
-        "model": "gpt-4o-mini",
-        "prompt": DEFAULT_TRANSLATION_PROMPT
+        "model": "gpt-5-mini",
+        "temperature": 0.3,
+        "system_prompt": DEFAULT_SYSTEM_PROMPT,
+        "user_prompt": DEFAULT_USER_PROMPT
     }
 }
 
@@ -1347,11 +1358,15 @@ def translate_with_openai(text: str, target_language: str, source_language: str 
     """
     from openai import OpenAI
     import os
+    import time
 
     config = CONFIG.get("translation", {})
     api_key = config.get("openai_api_key") or os.getenv("OPENAI_API_KEY")
-    model = config.get("model", "gpt-4o-mini")
-    prompt_template = config.get("prompt", DEFAULT_TRANSLATION_PROMPT)
+    model = config.get("model", "gpt-5-mini")
+    temperature = config.get("temperature", 0.3)
+    
+    system_prompt = config.get("system_prompt", DEFAULT_SYSTEM_PROMPT)
+    user_prompt_template = config.get("user_prompt", DEFAULT_USER_PROMPT)
 
     if not api_key:
         raise Exception(
@@ -1382,28 +1397,64 @@ def translate_with_openai(text: str, target_language: str, source_language: str 
     target_lang_name = LANG_NAMES.get(target_language.lower(), target_language)
     source_lang_name = LANG_NAMES.get(source_language.lower(), source_language)
 
-    # Format prompt with target language
-    user_prompt = prompt_template.format(
+    # Format user prompt with target language
+    formatted_user_prompt = user_prompt_template.format(
         source_language=source_lang_name,
         target_language=target_lang_name,
         text=text
     )
 
     try:
+        from rich.live import Live
+        import threading
+
         client = OpenAI(api_key=api_key)
 
-        console.print(f"\n[yellow]↻ Translating to {target_lang_name} using [green]{model}[/green]...[/yellow]")
+        # Spinner animation for translation
+        spinner_frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+        spinner_index = [0]
+        stop_spinner = threading.Event()
+        translation_start_time = time.time()
 
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": "You are a professional translator."},
-                {"role": "user", "content": user_prompt}
-            ],
-            temperature=0.3  # Low temperature for consistent, accurate translation
-        )
+        def spinner_message():
+            elapsed = time.time() - translation_start_time
+            elapsed_str = format_duration(elapsed)
+            spinner = spinner_frames[spinner_index[0] % len(spinner_frames)]
+            return f"\n[yellow]{spinner} Translating to {target_lang_name} using [green]{model}[/green]... {elapsed_str}[/yellow]"
 
-        translation = response.choices[0].message.content.strip()
+        def refresh_spinner():
+            """Background thread to animate spinner"""
+            while not stop_spinner.is_set():
+                spinner_index[0] += 1
+                time.sleep(0.1)
+
+        # Start spinner animation in background
+        spinner_thread = threading.Thread(target=refresh_spinner, daemon=True)
+        spinner_thread.start()
+
+        with Live(spinner_message(), console=console, refresh_per_second=10) as live:
+            def update_spinner():
+                while not stop_spinner.is_set():
+                    live.update(spinner_message())
+                    time.sleep(0.1)
+
+            update_thread = threading.Thread(target=update_spinner, daemon=True)
+            update_thread.start()
+
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": formatted_user_prompt}
+                ],
+                temperature=temperature
+            )
+
+            translation = response.choices[0].message.content.strip()
+
+            # Stop spinner
+            stop_spinner.set()
+            spinner_thread.join(timeout=0.5)
 
         console.print(f"[green]✓[/green] Translation complete")
 
@@ -1420,7 +1471,8 @@ def translate_with_openai(text: str, target_language: str, source_language: str 
                 "Add credits at https://platform.openai.com/account/billing"
             )
         elif "model" in error_msg:
-            raise Exception(f"Model '{model}' not found. Check config.yaml translation.model")
+            # Include original error as it might be an access issue, not just a typo
+            raise Exception(f"Model '{model}' error: {e}. Check config.yaml or your OpenAI account access.")
         else:
             raise Exception(f"OpenAI API error: {e}")
 
