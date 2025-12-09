@@ -717,11 +717,9 @@ def transcribe_audio(audio_file: Path, output_file: Path, language: str = None, 
     if translation_time > 0:
         stats.append(("Translation time", format_duration(translation_time)))
 
-    print_stats_table("Stats:", stats)
+    print_stats_table("Summary:", stats)
 
     if show_save_message:
-        console.print("\n[bold green]Transcription completed successfully[/bold green]")
-
         # Build list of saved files
         saved_files = [output_file]
         if translation_file:
@@ -729,6 +727,7 @@ def transcribe_audio(audio_file: Path, output_file: Path, language: str = None, 
 
         # Display as tree
         print_saved_files(saved_files)
+        console.print()  # Empty line after tree
 
 
 # =============================================================================
@@ -1256,8 +1255,6 @@ def record_and_transcribe(
 
     # Print consolidated summary on success
     if success:
-        console.print("\n[bold green]Transcription completed successfully[/bold green]")
-
         # Build list of saved files
         saved_files = []
         if CONFIG["recording"].get("keep_recording", False):
@@ -1269,6 +1266,7 @@ def record_and_transcribe(
 
         # Display as tree
         print_saved_files(saved_files)
+        console.print()  # Empty line after tree
 
 
 # =============================================================================
