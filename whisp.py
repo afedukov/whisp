@@ -970,10 +970,24 @@ def record_audio_interactive(device_index: int, base_filename: str = None) -> Pa
 
         # Calculate RMS level for visualization
         if config.get("show_level_meter", True):
-            # Convert int16 to float and calculate RMS
-            audio_float = indata.astype(np.float32) / 32768.0
-            rms = np.sqrt(np.mean(audio_float ** 2))
-            current_level[0] = min(rms * 3.0, 1.0)  # Scale and clamp to [0, 1]
+            try:
+                # Normalize audio to float range [-1.0, 1.0] regardless of input format
+                if indata.dtype == np.int16:
+                    audio_float = indata.astype(np.float32) / 32768.0
+                elif indata.dtype == np.int32:
+                    audio_float = indata.astype(np.float32) / 2147483648.0
+                elif indata.dtype == np.float32 or indata.dtype == np.float64:
+                    audio_float = indata.astype(np.float32)
+                else:
+                    # Unknown format, try to convert directly
+                    audio_float = indata.astype(np.float32)
+
+                # Calculate RMS level
+                rms = np.sqrt(np.mean(audio_float ** 2))
+                current_level[0] = min(rms * 3.0, 1.0)  # Scale and clamp to [0, 1]
+            except Exception:
+                # Silently ignore level meter errors to not interrupt recording
+                pass
 
     # No separate input thread needed - we'll check in the main loop
 
