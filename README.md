@@ -128,7 +128,7 @@ venv\Scripts\activate
 
 ### 4. Install the package
 
-**Option A: Install as editable package (recommended for development)**
+**Option A: Install as editable package (recommended)**
 ```bash
 pip install --upgrade pip
 pip install -e .
