@@ -1354,12 +1354,12 @@ def translate_with_openai(text: str, target_language: str, source_language: str 
             elapsed = time.time() - translation_start_time
             elapsed_str = format_duration(elapsed)
             spinner = spinner_frames[spinner_index[0] % len(spinner_frames)]
-            return f"\n[cyan]Translating to [green]{target_lang_name}[/green] using [green]{model}[/green]...[/cyan] [yellow]{spinner} {elapsed_str}[/yellow]"
+            return f"\n[cyan]Translating to [white]{target_lang_name}[/white] using [white]{model}[/white]...[/cyan] [yellow]{spinner} {elapsed_str}[/yellow]"
 
         def final_message():
             final_elapsed = time.time() - translation_start_time
             final_elapsed_str = format_duration(final_elapsed)
-            return f"\n[cyan]Translating to [green]{target_lang_name}[/green] using [green]{model}[/green]...[/cyan] [green]✓ {final_elapsed_str}[/green]"
+            return f"\n[cyan]Translating to [white]{target_lang_name}[/white] using [white]{model}[/white]...[/cyan] [green]✓ {final_elapsed_str}[/green]"
 
         def refresh_spinner():
             """Background thread to animate spinner"""
