@@ -1354,7 +1354,12 @@ def translate_with_openai(text: str, target_language: str, source_language: str 
             elapsed = time.time() - translation_start_time
             elapsed_str = format_duration(elapsed)
             spinner = spinner_frames[spinner_index[0] % len(spinner_frames)]
-            return f"\n[cyan]Translating to {target_lang_name} using {model}...[/cyan] [yellow]{spinner} {elapsed_str}[/yellow]"
+            return f"\n[cyan]Translating to [green]{target_lang_name}[/green] using [green]{model}[/green]...[/cyan] [yellow]{spinner} {elapsed_str}[/yellow]"
+
+        def final_message():
+            final_elapsed = time.time() - translation_start_time
+            final_elapsed_str = format_duration(final_elapsed)
+            return f"\n[cyan]Translating to [green]{target_lang_name}[/green] using [green]{model}[/green]...[/cyan] [green]✓ {final_elapsed_str}[/green]"
 
         def refresh_spinner():
             """Background thread to animate spinner"""
@@ -1386,14 +1391,10 @@ def translate_with_openai(text: str, target_language: str, source_language: str 
 
             translation = response.choices[0].message.content.strip()
 
-            # Stop spinner
+            # Stop spinner and show final message in the same line
             stop_spinner.set()
             spinner_thread.join(timeout=0.5)
-
-        # Show final message with checkmark and elapsed time
-        final_elapsed = time.time() - translation_start_time
-        final_elapsed_str = format_duration(final_elapsed)
-        console.print(f"\n[cyan]Translating to {target_lang_name} using {model}...[/cyan] [green]✓ {final_elapsed_str}[/green]")
+            live.update(final_message())
 
         return translation
 
