@@ -1139,7 +1139,7 @@ def record_and_transcribe(
 
     # Header
     print_header(model_size)
-    console.print("\n[bold cyan]🎙️  RECORDING MODE[/bold cyan]\n")
+    console.print("\n[bold cyan]RECORDING MODE[/bold cyan]\n")
 
     # Check disk space
     temp_dir = Path(tempfile.gettempdir())
