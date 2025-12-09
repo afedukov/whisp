@@ -27,7 +27,9 @@ from faster_whisper import WhisperModel
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
+from rich.table import Table
 from rich.text import Text
+from rich.tree import Tree
 from rich import box
 
 # Filter out warnings but allow tqdm progress bars
@@ -197,6 +199,35 @@ def format_duration(seconds: float) -> str:
         return f"{hours:02d}:{minutes:02d}:{secs:02d}"
     else:
         return f"{minutes:02d}:{secs:02d}"
+
+
+def print_saved_files(files: list[Path], title: str = "Files saved:"):
+    """Print saved files as a tree with consistent formatting.
+
+    Args:
+        files: List of file paths to display
+        title: Tree title (default: "Files saved:")
+    """
+    files_tree = Tree(f"\n[bold cyan]{title}[/bold cyan]")
+    for path in files:
+        files_tree.add(f"[dim]{path.parent}/[/dim][bold cyan]{path.name}[/bold cyan]")
+    console.print(files_tree)
+
+
+def print_stats_table(title: str, stats: list[tuple[str, str]]):
+    """Print statistics as a formatted table.
+
+    Args:
+        title: Table title (e.g., "Stats:", "Summary:")
+        stats: List of tuples (metric_name, value) to display
+    """
+    console.print(f"\n[bold cyan]{title}[/bold cyan]")
+    stats_table = Table(box=box.ROUNDED, border_style="green", show_header=False)
+    stats_table.add_column("Metric", style="dim")
+    stats_table.add_column("Value", style="bold")
+    for metric, value in stats:
+        stats_table.add_row(metric, value)
+    console.print(stats_table)
 
 
 def convert_audio_to_wav(audio_file: Path, quiet: bool = False) -> Path:
@@ -675,24 +706,29 @@ def transcribe_audio(audio_file: Path, output_file: Path, language: str = None, 
     speed_ratio = audio_duration / processing_time if processing_time > 0 and audio_duration > 0 else 0
     char_count = len(transcription)
 
-    console.print("\n[bold cyan]Stats:[/bold cyan]")
-    stats_table = Table(box=box.ROUNDED, border_style="green", show_header=False)
-    stats_table.add_column("Metric", style="dim")
-    stats_table.add_column("Value", style="bold")
-    stats_table.add_row("Duration", format_duration(audio_duration) if audio_duration > 0 else "unknown")
-    stats_table.add_row("Processing time", format_duration(processing_time))
-    stats_table.add_row("Speed", f"{speed_ratio:.1f}x realtime")
-    stats_table.add_row("Words", f"{word_count:,}")
-    stats_table.add_row("Characters", f"{char_count:,}")
+    # Build stats list
+    stats = [
+        ("Duration", format_duration(audio_duration) if audio_duration > 0 else "unknown"),
+        ("Processing time", format_duration(processing_time)),
+        ("Speed", f"{speed_ratio:.1f}x realtime"),
+        ("Words", f"{word_count:,}"),
+        ("Characters", f"{char_count:,}"),
+    ]
     if translation_time > 0:
-        stats_table.add_row("Translation time", format_duration(translation_time))
-    console.print(stats_table)
+        stats.append(("Translation time", format_duration(translation_time)))
+
+    print_stats_table("Stats:", stats)
 
     if show_save_message:
         console.print("\n[bold green]Transcription completed successfully[/bold green]")
-        console.print(f"[dim]└──[/dim] Transcription saved to: {output_file.resolve()}")
+
+        # Build list of saved files
+        saved_files = [output_file]
         if translation_file:
-            console.print(f"[dim]└──[/dim] Translation saved to: {translation_file.resolve()}")
+            saved_files.append(translation_file)
+
+        # Display as tree
+        print_saved_files(saved_files)
 
 
 # =============================================================================
@@ -1221,12 +1257,18 @@ def record_and_transcribe(
     # Print consolidated summary on success
     if success:
         console.print("\n[bold green]Transcription completed successfully[/bold green]")
-        
+
+        # Build list of saved files
+        saved_files = []
         if CONFIG["recording"].get("keep_recording", False):
-            console.print(f"[dim]├──[/dim] Recording saved to: {temp_wav_path.resolve()}")
-            console.print(f"[dim]└──[/dim] Transcription saved to: {output_file.resolve()}")
-        else:
-            console.print(f"[dim]└──[/dim] Transcription saved to: {output_file.resolve()}")
+            saved_files.append(temp_wav_path)
+        saved_files.append(output_file)
+        if translate_to:
+            translation_file = get_translation_filename(output_file, translate_to)
+            saved_files.append(translation_file)
+
+        # Display as tree
+        print_saved_files(saved_files)
 
 
 # =============================================================================
@@ -1312,7 +1354,7 @@ def translate_with_openai(text: str, target_language: str, source_language: str 
             elapsed = time.time() - translation_start_time
             elapsed_str = format_duration(elapsed)
             spinner = spinner_frames[spinner_index[0] % len(spinner_frames)]
-            return f"\n[yellow]{spinner} Translating to {target_lang_name} using [green]{model}[/green]... {elapsed_str}[/yellow]"
+            return f"\n[cyan]Translating to {target_lang_name} using {model}...[/cyan] [yellow]{spinner} {elapsed_str}[/yellow]"
 
         def refresh_spinner():
             """Background thread to animate spinner"""
@@ -1348,7 +1390,10 @@ def translate_with_openai(text: str, target_language: str, source_language: str 
             stop_spinner.set()
             spinner_thread.join(timeout=0.5)
 
-        console.print(f"[green]✓[/green] Translation complete")
+        # Show final message with checkmark and elapsed time
+        final_elapsed = time.time() - translation_start_time
+        final_elapsed_str = format_duration(final_elapsed)
+        console.print(f"\n[cyan]Translating to {target_lang_name} using {model}...[/cyan] [green]✓ {final_elapsed_str}[/green]")
 
         return translation
 
@@ -1609,32 +1654,31 @@ def transcribe_batch(input_dir: Path, output_file: Path, language: str = None, m
             refresh_thread.join(timeout=1)
     
     # Combine and save
-    console.print(f"\n[bold cyan]Saving combined transcription...[/bold cyan]")
-    
     combined_text = "\n\n".join(all_transcriptions).strip()
     output_file.write_text(combined_text, encoding='utf-8')
     
-    console.print(f"[bold green]✓[/bold green] Saved to: {output_file.resolve()}")
+    saved_files = [output_file]
 
-    # Save combined translation if requested
     # Translate combined text if requested
+    translation_time = 0
     if translate_to:
-        console.print(f"\n[bold cyan]Translating combined text to {translate_to}...[/bold cyan]")
         try:
             translation_file = get_translation_filename(output_file, translate_to)
-            
+
             # Use the language of the first file (or auto) as source
             # In batch mode, we assume mixed or same language, but prompt helps anyway
-            source_lang = "auto" 
+            source_lang = "auto"
 
+            translation_start = time.time()
             combined_translation = translate_with_openai(
                 text=combined_text,
-                target_language=translate_to, 
+                target_language=translate_to,
                 source_language=source_lang
             )
-            
+            translation_time = time.time() - translation_start
+
             translation_file.write_text(combined_translation, encoding='utf-8')
-            console.print(f"[bold green]✓[/bold green] [bold cyan]Translation saved:[/bold cyan] [green]{translation_file.resolve()}[/green]")
+            saved_files.append(translation_file)
         except Exception as e:
              console.print(f"\n[bold red]✗ Translation failed:[/bold red] {e}")
 
@@ -1642,20 +1686,24 @@ def transcribe_batch(input_dir: Path, output_file: Path, language: str = None, m
     # Calculate total processing time and speed
     batch_elapsed_time = time.time() - batch_start_time
     speed_ratio = total_duration / batch_elapsed_time if batch_elapsed_time > 0 else 0
+
+    # Build summary stats list
+    summary_stats = [
+        ("Files processed", str(len(audio_files))),
+        ("Total duration", format_duration(total_duration)),
+        ("Processing time", format_duration(batch_elapsed_time)),
+        ("Speed", f"{speed_ratio:.1f}x realtime"),
+        ("Total words", f"{total_words:,}"),
+        ("Total characters", f"{total_chars:,}"),
+    ]
+    if translation_time > 0:
+        summary_stats.append(("Translation time", format_duration(translation_time)))
+
+    print_stats_table("Summary:", summary_stats)
     
-    console.print("\n[bold cyan]Summary:[/bold cyan]")
-    summary_table = Table(box=box.ROUNDED, border_style="green", show_header=False)
-    summary_table.add_column("Metric", style="dim")
-    summary_table.add_column("Value", style="bold")
-    summary_table.add_row("Files processed", str(len(audio_files)))
-    summary_table.add_row("Total duration", format_duration(total_duration))
-    summary_table.add_row("Processing time", format_duration(batch_elapsed_time))
-    summary_table.add_row("Speed", f"{speed_ratio:.1f}x realtime")
-    summary_table.add_row("Total words", f"{total_words:,}")
-    summary_table.add_row("Total characters", f"{total_chars:,}")
-    console.print(summary_table)
-    
-    console.print("\n[bold green]Batch transcription completed successfully![/bold green]\n")
+    # Final file tree
+    print_saved_files(saved_files)
+    console.print()
 
 
 def main():
