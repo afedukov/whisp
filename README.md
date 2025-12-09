@@ -311,23 +311,22 @@ whisp ./lectures/ --language de --translate ru
    ```yaml
    translation:
      openai_api_key: "sk-..."
-     model: "gpt-4o-mini"  # Recommended: fast, cheap, excellent quality
+     model: "gpt-5-mini"  # Recommended: fast, excellent quality
    ```
    Or set environment variable: `export OPENAI_API_KEY="sk-..."`
 
 **Features:**
 - 🎯 High-quality contextual translation with GPT
 - 📝 Automatic paragraph organization for readability
-- 💰 Low cost: ~$0.015 per 1.5-hour lecture (gpt-4o-mini)
+- 💰 Low cost: ~$0.05 per 1.5-hour lecture (gpt-5-mini)
 - 🛡️ Preserves technical terms, names, and numbers
 - ⚙️ Customizable translation prompt in config.yaml
 - 🌍 Supports all languages (en, ru, de, es, fr, ja, zh, etc.)
 
-**Cost estimate (gpt-4o-mini):**
-- Short audio (5 min): ~$0.001
-- Medium audio (30 min): ~$0.003
-- Long lecture (1.5 hours): ~$0.015
-- Alternative: gpt-4o (~$0.25 per 1.5h, best quality but 15x more expensive)
+**Cost estimate (gpt-5-mini):**
+- Short audio (5 min): ~$0.003
+- Medium audio (30 min): ~$0.01
+- Long lecture (1.5 hours): ~$0.05
 
 > 💡 **Tip:** Translation is optional. If `--translate` is not specified, only transcription is saved.
 

@@ -57,28 +57,10 @@ MODEL_INFO = {
 
 # Default translation prompt for OpenAI API
 # Default system prompt for translation
-DEFAULT_SYSTEM_PROMPT = "You are a professional translator and editor specializing in academic lectures and public speaking."
+DEFAULT_SYSTEM_PROMPT = "You are a helpful translator."
 
 # Default user prompt template
-DEFAULT_USER_PROMPT = """Task: Translate the following transcript of a spoken lecture from {source_language} to {target_language}.
-
-Context: The source text is an automated transcription (ASR) of a speech. It contains phonetic errors, 
-misheard words, and run-on sentences typical of spoken language.
-
-Instructions:
-1.  **Correct & Translate:** Translate the text into natural, fluent {target_language}. If you encounter 
-    obvious transcription errors (words that sound similar but make no sense in context, e.g., "Militärgisse" 
-    or "brille vor Angst"), reconstruct the intended meaning based on the context before translating.
-2.  **Style & Tone:** Maintain the speaker's rhetorical style (storytelling, engaging, slightly informal 
-    but educational). Avoid word-for-word translation. Rephrase sentences to sound natural in {target_language}, 
-    as if a native speaker were giving the lecture.
-3.  **Structure:** Organize the text into logical paragraphs to improve readability. Fix punctuation where 
-    the transcript is messy.
-4.  **Accuracy:** Preserve all names (George Bush, Al Gore, Pat Buchanan), dates, and numbers exactly.
-5.  **Output:** Provide ONLY the translated text, nothing else.
-
-Text to translate:
-{text}"""
+DEFAULT_USER_PROMPT = "Translate the following text from {source_language} to {target_language}:\n\n{text}"
 
 # Default configuration values
 DEFAULT_CONFIG = {
