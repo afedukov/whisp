@@ -203,7 +203,7 @@ Available models:
 | **turbo** | ~800MB | Good | 8x faster | ✅ Default, fast multilingual |
 | **large** | ~3GB | Best | Slow | For academic content (latest v3) |
 | **large-v2** | ~3GB | Best | Slightly faster | Previous large version |
-| **medium** | ~1.5GB | Good | 2-3x faster | ⚖Balance of speed and quality |
+| **medium** | ~1.5GB | Good | 2-3x faster | Balance of speed and quality |
 | **small** | ~466MB | Basic | Fast | For simple tasks |
 | **base** | ~145MB | Basic | Very fast | Minimal accuracy |
 
