@@ -476,4 +476,4 @@ Questions and suggestions are welcome! Create issues or pull requests.
 
 ---
 
-**Made with ❤️ using OpenAI Whisper and faster-whisper**
+**Made with love in Germany 🇩🇪**
