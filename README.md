@@ -447,12 +447,13 @@ If your model download was interrupted, simply run the script again. Downloads a
 
 ```
 whisp/
-├── whisp.py                # Main script
-├── pyproject.toml          # Project metadata and install config
-├── requirements.txt        # Python dependencies
+├── whisp.py               # Main script
+├── pyproject.toml         # Project metadata and install config
+├── requirements.txt       # Python dependencies
 ├── config.yaml            # Configuration file
 ├── README.md              # Documentation
 └── venv/                  # Virtual environment
+```
 
 ## 📄 License
 
