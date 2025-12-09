@@ -448,12 +448,11 @@ If your model download was interrupted, simply run the script again. Downloads a
 ```
 whisp/
 ├── whisp.py                # Main script
+├── pyproject.toml          # Project metadata and install config
 ├── requirements.txt        # Python dependencies
-├── config.yaml            # Configuration file (optional)
+├── config.yaml            # Configuration file
 ├── README.md              # Documentation
-├── output/                # Default directory for recordings (auto-created)
-└── venv/                  # Virtual environment (created during installation)
-```
+└── venv/                  # Virtual environment
 
 ## 📄 License
 
