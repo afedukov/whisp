@@ -236,18 +236,7 @@ whisp record --model turbo --language de  # Auto-generates filename
 - First run will ask for microphone permission
 - If denied: System Settings → Privacy & Security → Microphone → Terminal
 
-**Configuration options** (in config.yaml):
-- `sample_rate`: Recording quality (default: 16000 Hz, optimal for Whisper)
-- `channels`: Mono/stereo (default: 1 - mono recommended for speech)
-- `default_device`: Pre-select recording device by name or index
-  - `-1` = system default (interactive selection)
-  - `"BlackHole 2ch"` = exact device name
-  - `"BlackHole"` = partial name match (useful when index changes)
-  - `4` = device index (less reliable, changes when devices are plugged/unplugged)
-- `save_dir`: Directory to save recordings (when `keep_recording: true`)
-- `keep_recording`: Keep audio file after transcription (default: false)
-- `compress_format`: Save recordings as `"m4a"` (10x smaller) or `"wav"` (default: m4a)
-- `show_level_meter`: Show audio level meter during recording (default: true)
+
 
 ### Batch Mode (Directory Input)
 
@@ -350,18 +339,20 @@ The application can be configured via `config.yaml` file. All settings have sens
 - `openai_api_key`: Your OpenAI API key (get at [platform.openai.com/api-keys](https://platform.openai.com/api-keys))
 - `model`: GPT model for translation (default: "gpt-5-mini")
   - Options: gpt-5-mini (recommended), gpt-5-nano, gpt-4o-mini
-- `prompt`: Customizable translation prompt (default includes strict quality requirements)
+- `temperature`: Creativity (default: 1.0 for gpt-5-mini, 0.3 otherwise)
+- `system_prompt`: AI translator's role/persona
+- `user_prompt`: Specific translation instructions
 
 ## 🎯 Model Selection Guide
 
 ### Recommended Models
 
 - **turbo** - ✅ Best for most use cases: fast (8x) with good accuracy
-- **large** - 🎓 Maximum accuracy for academic/technical content (latest v3)
-- **large-v2** - 🔄 Previous version, slightly faster than v3
-- **medium** - ⚖️ Good balance for any language
-- **small** - 🚀 Fast transcription with acceptable quality
-- **base** - 🏃 Quick tests only
+- **large** - Maximum accuracy for academic/technical content (latest v3)
+- **large-v2** - Previous version, slightly faster than v3
+- **medium** - Good balance for any language
+- **small** - Fast transcription with acceptable quality
+- **base** - Quick tests only
 
 ### Supported Languages
 
