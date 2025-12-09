@@ -18,3 +18,6 @@ simple-term-menu>=1.6.0
 
 # Configuration
 pyyaml>=6.0
+
+# Translation (optional - only needed if using --translate)
+openai>=1.0.0

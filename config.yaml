@@ -113,8 +113,11 @@ translation:
   openai_api_key: ""
 
   # OpenAI model for translation
-  # Recommended: gpt-4o-mini (fast, cheap, high quality)
-  # Other options: gpt-5-nano, gpt-5-mini, gpt-4o, gpt-4-turbo, gpt-3.5-turbo
+  # Recommended: gpt-4o-mini (fast, cheap, excellent quality - ~$0.015 per 1.5h lecture)
+  # Other options:
+  #   - gpt-4o: ~$0.25 per 1.5h lecture (best quality, expensive)
+  #   - gpt-4-turbo: expensive, not recommended
+  #   - gpt-3.5-turbo: cheaper but lower quality
   model: "gpt-4o-mini"
 
   # Translation prompt (customizable)

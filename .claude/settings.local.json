@@ -4,7 +4,11 @@
       "mcp__context7__resolve-library-id",
       "Bash(ls:*)",
       "Bash(brew list:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "WebSearch",
+      "Bash(source:*)",
+      "Bash(python -c:*)",
+      "WebFetch(domain:platform.openai.com)"
     ],
     "deny": [],
     "ask": []

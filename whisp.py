@@ -55,6 +55,22 @@ MODEL_INFO = {
     "base": "Very fast, ~145MB, basic accuracy"
 }
 
+# Default translation prompt for OpenAI API
+DEFAULT_TRANSLATION_PROMPT = """Translate the following text from {source_language} to {target_language}.
+
+CRITICAL REQUIREMENTS:
+1. Translate EVERYTHING - do not omit, shorten, or summarize any content
+2. Maintain the exact meaning and tone of the original text
+3. Preserve all technical terms, names, and numbers exactly as they appear
+4. Do NOT add any explanations, notes, or comments of your own
+5. Organize the translated text into logical paragraphs based on topic changes and natural breaks in the content
+6. Keep paragraph structure clear and readable
+
+Provide ONLY the translated text, nothing else.
+
+Text to translate:
+{text}"""
+
 # Default configuration values
 DEFAULT_CONFIG = {
     "model": {
@@ -79,6 +95,11 @@ DEFAULT_CONFIG = {
         "save_dir": "",
         "keep_recording": False,
         "compress_format": "m4a"
+    },
+    "translation": {
+        "openai_api_key": "",
+        "model": "gpt-4o-mini",
+        "prompt": DEFAULT_TRANSLATION_PROMPT
     }
 }
 
@@ -493,7 +514,7 @@ def load_model(device: str, model_size: str = "large"):
     return model
 
 
-def transcribe_audio(audio_file: Path, output_file: Path, language: str = None, model_size: str = "large", show_save_message: bool = True):
+def transcribe_audio(audio_file: Path, output_file: Path, language: str = None, model_size: str = "large", translate_to: str = None, show_save_message: bool = True):
     """Transcribe audio file to text (displayed as batch mode with 1 file)"""
     from rich.table import Table
     from rich.live import Live
@@ -604,7 +625,7 @@ def transcribe_audio(audio_file: Path, output_file: Path, language: str = None, 
     # Save transcription
     output_file.write_text(transcription, encoding='utf-8')
 
-    # Display preview
+    # Display preview of transcription
     preview_length = CONFIG["output"]["preview_length"]
     preview = transcription[:preview_length]
     if len(transcription) > preview_length:
@@ -617,6 +638,44 @@ def transcribe_audio(audio_file: Path, output_file: Path, language: str = None, 
         border_style="green",
         padding=(1, 2)
     ))
+
+    # Translation (if requested)
+    translation = None
+    translation_file = None
+    translation_time = 0
+
+    if translate_to:
+        try:
+            translation_start = time.time()
+            translation = translate_with_openai(
+                text=transcription,
+                target_language=translate_to,
+                source_language=info.get('language', 'auto')
+            )
+            translation_time = time.time() - translation_start
+
+            # Save translation to basename_<lang>.txt
+            translation_file = get_translation_filename(output_file, translate_to)
+            translation_file.write_text(translation, encoding='utf-8')
+
+            # Display preview of translation
+            translation_preview = translation[:preview_length]
+            if len(translation) > preview_length:
+                translation_preview += "..."
+
+            console.print(f"\n[bold cyan]Translation Preview:[/bold cyan]")
+            console.print(Panel(
+                translation_preview,
+                box=box.ROUNDED,
+                border_style="green",
+                padding=(1, 2)
+            ))
+
+        except Exception as e:
+            console.print(f"\n[red]✗ Translation failed:[/red] {e}")
+            console.print(f"[yellow]Transcription saved without translation[/yellow]")
+            translation = None
+            translation_file = None
 
     # Stats
     processing_time = time.time() - batch_start_time
@@ -632,11 +691,15 @@ def transcribe_audio(audio_file: Path, output_file: Path, language: str = None, 
     stats_table.add_row("Speed", f"{speed_ratio:.1f}x realtime")
     stats_table.add_row("Words", f"{word_count:,}")
     stats_table.add_row("Characters", f"{char_count:,}")
+    if translation_time > 0:
+        stats_table.add_row("Translation time", format_duration(translation_time))
     console.print(stats_table)
 
     if show_save_message:
         console.print("\n[bold green]Transcription completed successfully[/bold green]")
         console.print(f"[dim]└──[/dim] Transcription saved to: {output_file.resolve()}")
+        if translation_file:
+            console.print(f"[dim]└──[/dim] Translation saved to: {translation_file.resolve()}")
 
 
 # =============================================================================
@@ -1105,7 +1168,8 @@ def record_audio_interactive(device_index: int, base_filename: str = None) -> Pa
 def record_and_transcribe(
     output_file: Path = None,
     language: str = None,
-    model_size: str = "turbo"
+    model_size: str = "turbo",
+    translate_to: str = None
 ):
     """Main recording mode orchestrator.
 
@@ -1119,6 +1183,7 @@ def record_and_transcribe(
         output_file: Path to save transcription (optional, auto-generated if None)
         language: Language code (e.g., 'en', 'de') or None for auto-detect
         model_size: Whisper model to use
+        translate_to: Target language code for translation (e.g., 'ru', 'en') or None to skip translation
     """
     import shutil
 
@@ -1230,7 +1295,7 @@ def record_and_transcribe(
 
         # Step 3: Transcribe (reuse existing function with silent save)
         console.print("\n[cyan]Recording complete! Starting transcription...[/cyan]")
-        transcribe_audio(temp_wav_path, output_file, language, model_size, show_save_message=False)
+        transcribe_audio(temp_wav_path, output_file, language, model_size, translate_to, show_save_message=False)
         success = True
 
     except Exception:
@@ -1259,6 +1324,130 @@ def record_and_transcribe(
             console.print(f"[dim]└──[/dim] Transcription saved to: {output_file.resolve()}")
         else:
             console.print(f"[dim]└──[/dim] Transcription saved to: {output_file.resolve()}")
+
+
+# =============================================================================
+# Translation Functions (OpenAI API)
+# =============================================================================
+
+def translate_with_openai(text: str, target_language: str, source_language: str = "auto") -> str:
+    """
+    Translate text using OpenAI ChatGPT API.
+
+    Args:
+        text: Text to translate
+        target_language: Target language code (e.g., 'ru', 'en', 'de')
+        source_language: Source language (detected from transcription)
+
+    Returns:
+        Translated text with paragraphs
+
+    Raises:
+        Exception if translation fails
+    """
+    from openai import OpenAI
+    import os
+
+    config = CONFIG.get("translation", {})
+    api_key = config.get("openai_api_key") or os.getenv("OPENAI_API_KEY")
+    model = config.get("model", "gpt-4o-mini")
+    prompt_template = config.get("prompt", DEFAULT_TRANSLATION_PROMPT)
+
+    if not api_key:
+        raise Exception(
+            "OpenAI API key not configured. "
+            "Add 'openai_api_key' to translation section in config.yaml "
+            "or set OPENAI_API_KEY environment variable"
+        )
+
+    # Language code to full name mapping
+    LANG_NAMES = {
+        'en': 'English',
+        'ru': 'Russian',
+        'de': 'German',
+        'es': 'Spanish',
+        'fr': 'French',
+        'it': 'Italian',
+        'ja': 'Japanese',
+        'ko': 'Korean',
+        'zh': 'Chinese',
+        'pt': 'Portuguese',
+        'nl': 'Dutch',
+        'pl': 'Polish',
+        'tr': 'Turkish',
+        'ar': 'Arabic',
+        'hi': 'Hindi'
+    }
+
+    target_lang_name = LANG_NAMES.get(target_language.lower(), target_language)
+    source_lang_name = LANG_NAMES.get(source_language.lower(), source_language)
+
+    # Format prompt with target language
+    user_prompt = prompt_template.format(
+        source_language=source_lang_name,
+        target_language=target_lang_name,
+        text=text
+    )
+
+    try:
+        client = OpenAI(api_key=api_key)
+
+        console.print(f"\n[yellow]↻ Translating to {target_lang_name} using [green]{model}[/green]...[/yellow]")
+
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": "You are a professional translator."},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.3  # Low temperature for consistent, accurate translation
+        )
+
+        translation = response.choices[0].message.content.strip()
+
+        console.print(f"[green]✓[/green] Translation complete")
+
+        return translation
+
+    except Exception as e:
+        error_msg = str(e).lower()
+
+        if "api key" in error_msg or "unauthorized" in error_msg:
+            raise Exception("OpenAI API key is invalid")
+        elif "quota" in error_msg or "insufficient" in error_msg:
+            raise Exception(
+                "OpenAI API quota exceeded. "
+                "Add credits at https://platform.openai.com/account/billing"
+            )
+        elif "model" in error_msg:
+            raise Exception(f"Model '{model}' not found. Check config.yaml translation.model")
+        else:
+            raise Exception(f"OpenAI API error: {e}")
+
+
+def get_translation_filename(original_path: Path, target_language: str) -> Path:
+    """
+    Generate filename for translation.
+
+    Examples:
+        lecture.txt + 'ru' → lecture_ru.txt
+        recording_20251209_072149.txt + 'en' → recording_20251209_072149_en.txt
+
+    Args:
+        original_path: Path to original transcription file
+        target_language: Language code (e.g., 'ru', 'en')
+
+    Returns:
+        Path for translation file
+    """
+    stem = original_path.stem
+    suffix = original_path.suffix
+    parent = original_path.parent
+
+    # Create new filename: basename_<lang>.txt
+    new_stem = f"{stem}_{target_language.lower()}"
+
+    return parent / f"{new_stem}{suffix}"
 
 
 # =============================================================================
@@ -1324,7 +1513,7 @@ def transcribe_single_file(model, audio_file: Path, language: str = None, quiet:
     return transcription, info_dict
 
 
-def transcribe_batch(input_dir: Path, output_file: Path, language: str = None, model_size: str = "large"):
+def transcribe_batch(input_dir: Path, output_file: Path, language: str = None, model_size: str = "large", translate_to: str = None):
     """Transcribe all audio files in a directory (batch mode)"""
     from rich.table import Table
     from rich.live import Live
@@ -1418,6 +1607,7 @@ def transcribe_batch(input_dir: Path, output_file: Path, language: str = None, m
     console.print(f"\n[bold cyan]Processing...[/bold cyan]")
     
     all_transcriptions = []
+    all_translations = []  # For storing translations if requested
     total_words = 0
     total_chars = 0
     batch_start_time = time.time()  # Track total processing time
@@ -1445,7 +1635,23 @@ def transcribe_batch(input_dir: Path, output_file: Path, language: str = None, m
                 
                 try:
                     transcription, info = transcribe_single_file(model, audio_file, language, quiet=True)
-                    
+
+                    # Translate if requested
+                    if translate_to:
+                        try:
+                            file_statuses[i] = f"[yellow]↻ translating...[/yellow]"
+                            live.update(make_table())
+
+                            translation = translate_with_openai(
+                                text=transcription,
+                                target_language=translate_to,
+                                source_language=info.get('language', 'auto')
+                            )
+                            all_translations.append(translation)
+                        except Exception as e:
+                            console.print(f"\n[red]✗ Translation failed for {audio_file.name}:[/red] {e}")
+                            all_translations.append(f"[TRANSLATION ERROR: {str(e)}]")
+
                     # Just add text with newline separator (no file headers)
                     all_transcriptions.append(transcription)
                     
@@ -1478,7 +1684,14 @@ def transcribe_batch(input_dir: Path, output_file: Path, language: str = None, m
     output_file.write_text(combined_text, encoding='utf-8')
     
     console.print(f"[bold green]✓[/bold green] Saved to: {output_file.resolve()}")
-    
+
+    # Save combined translation if requested
+    if translate_to and all_translations:
+        translation_file = get_translation_filename(output_file, translate_to)
+        combined_translation = "\n\n".join(all_translations).strip()
+        translation_file.write_text(combined_translation, encoding='utf-8')
+        console.print(f"[bold green]✓[/bold green] [bold cyan]Translation saved:[/bold cyan] [green]{translation_file.resolve()}[/green]")
+
     # Final stats
     # Calculate total processing time and speed
     batch_elapsed_time = time.time() - batch_start_time
@@ -1566,13 +1779,21 @@ Modes:
         help="Language code (e.g., 'en', 'ru', 'de', 'es'). If not specified, will auto-detect."
     )
 
+    parser.add_argument(
+        "--translate",
+        type=str,
+        default=None,
+        metavar="LANG",
+        help="Translate transcription to target language using OpenAI API (e.g., 'ru', 'en', 'de')"
+    )
+
     args = parser.parse_args()
 
     try:
         # Check mode: recording, batch (directory), or single file
         if args.input.lower() == "record":
             # Recording mode
-            record_and_transcribe(args.output_file, args.language, args.model)
+            record_and_transcribe(args.output_file, args.language, args.model, args.translate)
         else:
             # Convert input to Path for file/directory modes
             input_path = Path(args.input)
@@ -1591,10 +1812,10 @@ Modes:
 
             if input_path.is_dir():
                 # Batch mode
-                transcribe_batch(input_path, output_file, args.language, args.model)
+                transcribe_batch(input_path, output_file, args.language, args.model, args.translate)
             else:
                 # Single file mode
-                transcribe_audio(input_path, output_file, args.language, args.model)
+                transcribe_audio(input_path, output_file, args.language, args.model, args.translate)
     except KeyboardInterrupt:
         console.print("\n\n[yellow]Operation cancelled by user[/yellow]")
         console.print("[dim]Exiting gracefully...[/dim]\n")

@@ -6,6 +6,7 @@ Fast and accurate audio transcription CLI powered by [OpenAI Whisper Large-v3](h
 - 🎯 Transcribe audio files with high accuracy
 - 🎙️ Record from microphone and transcribe in one command
 - 🗂️ Batch process entire folders
+- 🌐 **Auto-translate** transcriptions to any language (powered by OpenAI GPT)
 - ⚡ **4-8x faster** than standard Whisper implementations
 - 📁 Auto-generated output files (optional)
 - 🌍 99+ languages supported with auto-detection
@@ -24,6 +25,9 @@ whisp ./recordings/                      # → recordings.txt
 
 # With specific model and language
 whisp audio.mp3 --model large --language de
+
+# With translation to target language
+whisp audio.mp3 --translate ru             # → audio.txt + audio_ru.txt
 ```
 
 > 💡 **Note:** If you installed with `pip install -r requirements.txt` instead of `pip install -e .`, use `python whisp.py` instead of `whisp`
@@ -45,6 +49,7 @@ whisp audio.mp3 --model large --language de
 - 📁 **Auto-generated filenames** - optional output file paths for convenience
 - 💾 **M4A compression** - save recordings 10x smaller with minimal quality loss
 - 🎚️ **Audio level meter** - real-time recording level visualization
+- 🌐 **Auto-translation** - translate transcriptions to any language using OpenAI GPT API
 
 ## 🎵 Supported Audio Formats
 
@@ -278,6 +283,54 @@ whisp ./recordings/                    # Auto-generates recordings.txt
 **Supported formats:**
 `.mp3`, `.wav`, `.m4a`, `.flac`, `.ogg`, `.wma`, `.aac`, `.opus`
 
+### Translation Mode
+
+Automatically translate transcriptions to any target language using OpenAI GPT API.
+
+**Basic translation:**
+```bash
+whisp audio.mp3 --translate ru              # → audio.txt + audio_ru.txt
+whisp audio.mp3 --translate en --language de  # German audio → English translation
+```
+
+**With recording mode:**
+```bash
+whisp record --translate ru
+# Creates: recording_20251209_072149.m4a + recording_20251209_072149.txt + recording_20251209_072149_ru.txt
+```
+
+**With batch mode:**
+```bash
+whisp ./lectures/ --language de --translate ru
+# Creates: lectures.txt + lectures_ru.txt (all files combined)
+```
+
+**Setup:**
+1. Get OpenAI API key at [https://platform.openai.com/api-keys](https://platform.openai.com/api-keys)
+2. Add to `config.yaml`:
+   ```yaml
+   translation:
+     openai_api_key: "sk-..."
+     model: "gpt-4o-mini"  # Recommended: fast, cheap, excellent quality
+   ```
+   Or set environment variable: `export OPENAI_API_KEY="sk-..."`
+
+**Features:**
+- 🎯 High-quality contextual translation with GPT
+- 📝 Automatic paragraph organization for readability
+- 💰 Low cost: ~$0.015 per 1.5-hour lecture (gpt-4o-mini)
+- 🛡️ Preserves technical terms, names, and numbers
+- ⚙️ Customizable translation prompt in config.yaml
+- 🌍 Supports all languages (en, ru, de, es, fr, ja, zh, etc.)
+
+**Cost estimate (gpt-4o-mini):**
+- Short audio (5 min): ~$0.001
+- Medium audio (30 min): ~$0.003
+- Long lecture (1.5 hours): ~$0.015
+- Alternative: gpt-4o (~$0.25 per 1.5h, best quality but 15x more expensive)
+
+> 💡 **Tip:** Translation is optional. If `--translate` is not specified, only transcription is saved.
+
 ### Command Help
 
 ```bash
@@ -314,6 +367,12 @@ The application can be configured via `config.yaml` file. All settings have sens
 
 ### Output Settings
 - `preview_length`: Characters to show in preview (default: 200)
+
+### Translation Settings
+- `openai_api_key`: Your OpenAI API key (get at [platform.openai.com/api-keys](https://platform.openai.com/api-keys))
+- `model`: GPT model for translation (default: "gpt-4o-mini" - fast, cheap, ~$0.015 per 1.5h lecture)
+  - Options: gpt-4o-mini (recommended), gpt-4o (best quality, expensive), gpt-3.5-turbo (cheaper but lower quality)
+- `prompt`: Customizable translation prompt (default includes strict quality requirements)
 
 ## 🎯 Model Selection Guide
 
