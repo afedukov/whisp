@@ -144,11 +144,12 @@ translation:
        - Preserve the speaker’s claims, hedging, and level of certainty (do not strengthen or weaken statements).
 
     2) ASR Repair:
-       - Correct only obvious transcription errors when the intended wording is clear from context.
-       - If a word sounds like a phonetic error (e.g. similar sounding but wrong meaning), translate the intended meaning based on context.
-       - Prefer a best-effort repair over [unclear] when a likely correction is strongly suggested by the surrounding context.
-       - Only mark as [unclear] if the meaning is completely lost (use sparingly).
-       - Do NOT ‘improve’ already clear wording; only repair corrupted segments.
+       - Correct obvious transcription errors ONLY when the intended wording is clear from the immediate context.
+       - **Safety Rule:** Never replace an unclear token with a concept from a different domain (e.g., military terms 
+         in a usability context) just because it sounds similar.
+       - **Fallback:** If you are not >90% sure of the repair, keep the original word in brackets (e.g., `[OriginalWord]`) 
+         or mark as `[unclear]`.
+       - Prefer a best-effort repair over [unclear] ONLY when the correction is strongly supported by the sentence logic.
 
     3) Style & Tone:
        - Produce natural, fluent {target_language} with the flow of a spoken lecture.
