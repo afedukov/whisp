@@ -8,7 +8,6 @@ Fast and accurate audio transcription CLI powered by [OpenAI Whisper Large-v3](h
 - 🗂️ Batch process entire folders
 - 🌐 **Auto-translate** transcriptions to any language (powered by OpenAI GPT)
 - ⚡ **4-8x faster** than standard Whisper implementations
-- 📁 Auto-generated output files (optional)
 - 🌍 99+ languages supported with auto-detection
 
 ## 🚀 Quick Start
@@ -18,7 +17,7 @@ Fast and accurate audio transcription CLI powered by [OpenAI Whisper Large-v3](h
 whisp audio.mp3                          # → audio.txt
 
 # Record and transcribe
-whisp record                             # → output/recording_TIMESTAMP.txt
+whisp record                             # → ~/Records/recording_TIMESTAMP.txt
 
 # Batch process folder
 whisp ./recordings/                      # → recordings.txt
@@ -39,16 +38,12 @@ whisp audio.mp3 --translate ru             # → audio.txt + audio_ru.txt
 - 🚀 GPU (CUDA) support for accelerated processing
 - 💾 Lower memory usage with int8 quantization on CPU
 - 🌍 Automatic language detection or manual language specification
-- 📊 Beautiful progress indicators and live status tables with animated spinners
 - 📝 Preview of transcription results
 - 🔄 Multiple model options (large, large-v2, turbo, medium, small, base)
 - 🎤 Voice activity detection (VAD) to skip silence
-- 📥 Resumable model downloads with progress bar
-- 🎙️ **Microphone recording mode** - record and transcribe with live audio level meter
-- 🗂️ **Batch mode** - process entire folders with live progress tracking
-- 📁 **Auto-generated filenames** - optional output file paths for convenience
+- 🎙️ **Microphone recording mode** - record and transcribe
+- 🗂️ **Batch mode** - process entire folders
 - 💾 **M4A compression** - save recordings 10x smaller with minimal quality loss
-- 🎚️ **Audio level meter** - real-time recording level visualization
 - 🌐 **Auto-translation** - translate transcriptions to any language using OpenAI GPT API
 
 ## 🎵 Supported Audio Formats
