@@ -1558,7 +1558,7 @@ def transcribe_batch(input_dir: Path, output_file: Path, language: str = None, m
     
     # Print batch mode header
     console.print("\n[bold magenta]BATCH MODE[/bold magenta]")
-    console.print(f"[dim]Directory: {input_dir.resolve()}[/dim]")
+    console.print(f"[dim]Directory: {input_dir.resolve()}[/dim]", highlight=False)
 
     # Resolve output path and split using os.path to avoid Rich auto-coloring
     output_full = str(output_file.resolve())
