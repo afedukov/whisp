@@ -34,16 +34,16 @@ whisp audio.mp3 --translate ru             # → audio.txt + audio_ru.txt
 ## ✨ Full Feature List
 
 - 🎯 High accuracy transcription with Whisper Large-v3
-- ⚡ **4-8x faster** than standard Whisper (using CTranslate2)
+- ⚡ 4-8x faster than standard Whisper (using CTranslate2)
 - 🚀 GPU (CUDA) support for accelerated processing
 - 💾 Lower memory usage with int8 quantization on CPU
 - 🌍 Automatic language detection or manual language specification
 - 📝 Preview of transcription results
 - 🔄 Multiple model options (large, large-v2, turbo, medium, small, base)
 - 🎤 Voice activity detection (VAD) to skip silence
-- 🎙️ **Microphone recording mode** - record and transcribe
-- 🗂️ **Batch mode** - process entire folders
-- 💾 **M4A compression** - save recordings 10x smaller with minimal quality loss
+- 🎙️ Microphone recording mode - record and transcribe
+- 🗂️ Batch mode - process entire folders
+- 💾 M4A compression - save recordings 10x smaller with minimal quality loss
 - 🌐 **Auto-translation** - translate transcriptions to any language using OpenAI GPT API
 
 ## 🎵 Supported Audio Formats
@@ -140,14 +140,6 @@ pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-This will install:
-- `faster-whisper` - Optimized Whisper implementation (4-8x faster)
-- `ctranslate2` - Inference engine for transformer models
-- `rich` - Beautiful terminal formatting
-- `huggingface-hub` - Model downloading with resumable transfers
-- `sounddevice` - Microphone recording
-- Other required dependencies
-
 > ⚠️ **Note:** The first run will take some time as the Whisper model (~3GB for large) will be downloaded. The model is cached locally for future use. Downloads can be interrupted and resumed.
 
 ### 5. Using the `whisp` command
@@ -204,16 +196,16 @@ whisp interview.mp3 --model medium
 
 ### Model Selection
 
-6 Whisper models are available:
+Available models:
 
 | Model | Size | Accuracy | Speed | Recommendation |
 |-------|------|----------|-------|----------------|
 | **turbo** | ~800MB | Good | 8x faster | ✅ Default, fast multilingual |
-| **large** | ~3GB | Best | Slow | 🎓 For academic content (latest v3) |
-| **large-v2** | ~3GB | Best | Slightly faster | 🔄 Previous large version |
-| **medium** | ~1.5GB | Good | 2-3x faster | ⚖️ Balance of speed and quality |
-| **small** | ~466MB | Basic | Fast | 🚀 For simple tasks |
-| **base** | ~145MB | Basic | Very fast | 🏃 Minimal accuracy |
+| **large** | ~3GB | Best | Slow | For academic content (latest v3) |
+| **large-v2** | ~3GB | Best | Slightly faster | Previous large version |
+| **medium** | ~1.5GB | Good | 2-3x faster | ⚖Balance of speed and quality |
+| **small** | ~466MB | Basic | Fast | For simple tasks |
+| **base** | ~145MB | Basic | Very fast | Minimal accuracy |
 
 ### Recording Mode (Microphone Input)
 
@@ -267,14 +259,6 @@ whisp ./lectures/ combined_transcript.txt --language de --model turbo
 whisp ./recordings/                    # Auto-generates recordings.txt
 ```
 
-**Batch mode features:**
-- 📋 **Live table** with real-time status updates for each file
-- 🔄 **Animated spinners** show processing progress for current file
-- ⏱️ **Elapsed timer** for each file
-- 🔢 **Natural sorting** (file1, file2, file10 instead of file1, file10, file2)
-- 📝 Combined output in a single text file
-- 📈 Summary with speed metrics and statistics
-
 **Supported formats:**
 `.mp3`, `.wav`, `.m4a`, `.flac`, `.ogg`, `.wma`, `.aac`, `.opus`
 
@@ -311,12 +295,12 @@ whisp ./lectures/ --language de --translate ru
    Or set environment variable: `export OPENAI_API_KEY="sk-..."`
 
 **Features:**
-- 🎯 High-quality contextual translation with GPT
-- 📝 Automatic paragraph organization for readability
-- 💰 Low cost: ~$0.05 per 1.5-hour lecture (gpt-5-mini)
-- 🛡️ Preserves technical terms, names, and numbers
-- ⚙️ Customizable translation prompt in config.yaml
-- 🌍 Supports all languages (en, ru, de, es, fr, ja, zh, etc.)
+- High-quality contextual translation with GPT
+- Automatic paragraph organization for readability
+- Low cost: ~$0.05 per 1.5-hour lecture (gpt-5-mini)
+- Preserves technical terms, names, and numbers
+- Customizable translation prompt in config.yaml
+- Supports all languages (en, ru, de, es, fr, ja, zh, etc.)
 
 **Cost estimate (gpt-5-mini):**
 - Short audio (5 min): ~$0.003
