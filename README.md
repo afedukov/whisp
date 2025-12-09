@@ -451,11 +451,14 @@ whisp/
 ├── pyproject.toml         # Project metadata and install config
 ├── requirements.txt       # Python dependencies
 ├── config.yaml            # Configuration file
+├── LICENSE                # MIT License
 ├── README.md              # Documentation
 └── venv/                  # Virtual environment
 ```
 
 ## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 This project uses the Whisper model from OpenAI. See [Whisper License](https://github.com/openai/whisper/blob/main/LICENSE) for details.
 
