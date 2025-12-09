@@ -210,7 +210,15 @@ def print_saved_files(files: list[Path], title: str = "Files saved:"):
     """
     files_tree = Tree(f"\n[bold cyan]{title}[/bold cyan]")
     for path in files:
-        files_tree.add(f"[dim]{path.parent}/[/dim][bold cyan]{path.name}[/bold cyan]")
+        # Resolve path and split using os.path to avoid Rich auto-coloring
+        full_path = str(path.resolve())
+        dir_path = os.path.dirname(full_path)
+        filename = os.path.basename(full_path)
+        # Use Text object to prevent Rich from auto-highlighting paths
+        line = Text()
+        line.append(dir_path + "/", style="dim")
+        line.append(filename, style="bold cyan")
+        files_tree.add(line)
     console.print(files_tree)
 
 
@@ -549,8 +557,17 @@ def transcribe_audio(audio_file: Path, output_file: Path, language: str = None, 
     if not check_file_exists(audio_file):
         sys.exit(1)
 
-    console.print(f"\n[dim]Input: {audio_file.resolve()}[/dim]")
-    console.print(f"[dim]Output: {output_file.resolve()}[/dim]")
+    # Resolve paths and split using os.path to avoid Rich auto-coloring
+    audio_full = str(audio_file.resolve())
+    output_full = str(output_file.resolve())
+
+    audio_dir = os.path.dirname(audio_full)
+    audio_name = os.path.basename(audio_full)
+    output_dir = os.path.dirname(output_full)
+    output_name = os.path.basename(output_full)
+
+    console.print(f"\n[dim]Input: {audio_dir}/[/dim][bold cyan]{audio_name}[/bold cyan]", highlight=False)
+    console.print(f"[dim]Output: {output_dir}/[/dim][bold cyan]{output_name}[/bold cyan]", highlight=False)
 
     # Determine device
     try:
@@ -1528,7 +1545,12 @@ def transcribe_batch(input_dir: Path, output_file: Path, language: str = None, m
     # Print batch mode header
     console.print("\n[bold magenta]BATCH MODE[/bold magenta]")
     console.print(f"[dim]Directory: {input_dir.resolve()}[/dim]")
-    console.print(f"[dim]Output: {output_file.resolve()}[/dim]")
+
+    # Resolve output path and split using os.path to avoid Rich auto-coloring
+    output_full = str(output_file.resolve())
+    output_dir = os.path.dirname(output_full)
+    output_name = os.path.basename(output_full)
+    console.print(f"[dim]Output: {output_dir}/[/dim][bold cyan]{output_name}[/bold cyan]", highlight=False)
     
     # Calculate total duration
     total_duration = 0.0
