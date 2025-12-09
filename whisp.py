@@ -1482,7 +1482,7 @@ def transcribe_batch(input_dir: Path, output_file: Path, language: str = None, m
         sys.exit(1)
     
     # Print batch mode header
-    console.print("\n[bold magenta]📦 BATCH MODE[/bold magenta]")
+    console.print("\n[bold magenta]BATCH MODE[/bold magenta]")
     console.print(f"[dim]Directory: {input_dir.resolve()}[/dim]")
     console.print(f"[dim]Output: {output_file.resolve()}[/dim]")
     
@@ -1581,20 +1581,7 @@ def transcribe_batch(input_dir: Path, output_file: Path, language: str = None, m
                     transcription, info = transcribe_single_file(model, audio_file, language, quiet=True)
 
                     # Translate if requested
-                    if translate_to:
-                        try:
-                            file_statuses[i] = f"[yellow]↻ translating...[/yellow]"
-                            live.update(make_table())
 
-                            translation = translate_with_openai(
-                                text=transcription,
-                                target_language=translate_to,
-                                source_language=info.get('language', 'auto')
-                            )
-                            all_translations.append(translation)
-                        except Exception as e:
-                            console.print(f"\n[red]✗ Translation failed for {audio_file.name}:[/red] {e}")
-                            all_translations.append(f"[TRANSLATION ERROR: {str(e)}]")
 
                     # Just add text with newline separator (no file headers)
                     all_transcriptions.append(transcription)
@@ -1630,11 +1617,26 @@ def transcribe_batch(input_dir: Path, output_file: Path, language: str = None, m
     console.print(f"[bold green]✓[/bold green] Saved to: {output_file.resolve()}")
 
     # Save combined translation if requested
-    if translate_to and all_translations:
-        translation_file = get_translation_filename(output_file, translate_to)
-        combined_translation = "\n\n".join(all_translations).strip()
-        translation_file.write_text(combined_translation, encoding='utf-8')
-        console.print(f"[bold green]✓[/bold green] [bold cyan]Translation saved:[/bold cyan] [green]{translation_file.resolve()}[/green]")
+    # Translate combined text if requested
+    if translate_to:
+        console.print(f"\n[bold cyan]Translating combined text to {translate_to}...[/bold cyan]")
+        try:
+            translation_file = get_translation_filename(output_file, translate_to)
+            
+            # Use the language of the first file (or auto) as source
+            # In batch mode, we assume mixed or same language, but prompt helps anyway
+            source_lang = "auto" 
+
+            combined_translation = translate_with_openai(
+                text=combined_text,
+                target_language=translate_to, 
+                source_language=source_lang
+            )
+            
+            translation_file.write_text(combined_translation, encoding='utf-8')
+            console.print(f"[bold green]✓[/bold green] [bold cyan]Translation saved:[/bold cyan] [green]{translation_file.resolve()}[/green]")
+        except Exception as e:
+             console.print(f"\n[bold red]✗ Translation failed:[/bold red] {e}")
 
     # Final stats
     # Calculate total processing time and speed
