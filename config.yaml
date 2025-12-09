@@ -93,7 +93,7 @@ recording:
   # Directory to save recordings (only used when keep_recording is true)
   # Empty = system temp directory (recordings will be deleted after transcription)
   # Path = save recordings with timestamp to this directory
-  save_dir: "./output"
+  save_dir: "~/Records"
 
   # Keep recording file after transcription
   # true = save with timestamp in save_dir, false = delete after transcription
@@ -102,3 +102,35 @@ recording:
   # Compress recording to save space ("m4a" or "wav")
   # m4a is ~10x smaller than wav with minimal quality loss
   compress_format: "m4a"
+
+# =============================================================================
+# Translation Settings (OpenAI API)
+# =============================================================================
+translation:
+  # OpenAI API key for translation
+  # Get one at: https://platform.openai.com/api-keys
+  # Or set environment variable: OPENAI_API_KEY
+  openai_api_key: ""
+
+  # OpenAI model for translation
+  # Recommended: gpt-4o-mini (fast, cheap, high quality)
+  # Other options: gpt-5-nano, gpt-5-mini, gpt-4o, gpt-4-turbo, gpt-3.5-turbo
+  model: "gpt-4o-mini"
+
+  # Translation prompt (customizable)
+  # Variables: {source_language}, {target_language}, {text}
+  prompt: |
+    Translate the following text from {source_language} to {target_language}.
+
+    CRITICAL REQUIREMENTS:
+    1. Translate EVERYTHING - do not omit, shorten, or summarize any content
+    2. Maintain the exact meaning and tone of the original text
+    3. Preserve all technical terms, names, and numbers exactly as they appear
+    4. Do NOT add any explanations, notes, or comments of your own
+    5. Organize the translated text into logical paragraphs based on topic changes and natural breaks in the content
+    6. Keep paragraph structure clear and readable
+
+    Provide ONLY the translated text, nothing else.
+
+    Text to translate:
+    {text}
