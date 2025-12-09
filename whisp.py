@@ -879,7 +879,7 @@ def get_recording_file_path(suffix: str = '.wav', base_filename: str = None) -> 
 
     if save_dir and keep_recording:
         # Create permanent file with timestamp
-        save_path = Path(save_dir)
+        save_path = Path(str(save_dir)).expanduser()
         save_path.mkdir(parents=True, exist_ok=True)
 
         if base_filename:
@@ -1206,7 +1206,7 @@ def record_and_transcribe(
     if output_file is None:
         save_dir = CONFIG["recording"].get("save_dir", "")
         if save_dir:
-            save_path = Path(save_dir)
+            save_path = Path(str(save_dir)).expanduser()
             save_path.mkdir(parents=True, exist_ok=True)
             output_file = save_path / f"recording_{timestamp}.txt"
         else:
