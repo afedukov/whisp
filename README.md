@@ -312,9 +312,9 @@ whisp --version
 
 The application can be configured via `config.yaml` file. All settings have sensible defaults.
     
-    **Configuration Loading Order (Priority High to Low):**
-    1. `~/.whisp/config.yaml` in user home directory (User global)
-    2. `config.yaml` in application directory (Default)
+**Configuration Loading Order (Priority High to Low):**
+1. `~/.whisp/config.yaml` in user home directory (User global)
+2. `config.yaml` in application directory (Default)
 
 ### Transcription Settings
 - `default_language`: Auto-detect if empty, or specify (e.g., "en", "de", "ru")
