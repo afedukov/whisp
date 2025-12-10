@@ -9,7 +9,8 @@
       "Bash(source:*)",
       "Bash(python -c:*)",
       "WebFetch(domain:platform.openai.com)",
-      "WebFetch(domain:docs.aimlapi.com)"
+      "WebFetch(domain:docs.aimlapi.com)",
+      "Bash(python whisp.py:*)"
     ],
     "deny": [],
     "ask": []

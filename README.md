@@ -1,4 +1,4 @@
-# 🎙️ Whisper
+# 🎙️ Whisp
 
 Fast and accurate audio transcription CLI powered by [OpenAI Whisper Large-v3](https://huggingface.co/openai/whisper-large-v3) and [faster-whisper](https://github.com/SYSTRAN/faster-whisper).
 
@@ -301,7 +301,11 @@ whisp ./lectures/ --language de --translate ru
 ### Command Help
 
 ```bash
-python whisp.py --help
+# Show help
+whisp --help
+
+# Show version
+whisp --version
 ```
 
 ## ⚙️ Configuration

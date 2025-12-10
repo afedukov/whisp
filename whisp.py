@@ -38,6 +38,29 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 console = Console()
 
+# Application version - read from pyproject.toml or package metadata
+def get_version() -> str:
+    """Get version from package metadata or pyproject.toml"""
+    try:
+        # Try to get version from installed package metadata (works after pip install -e .)
+        from importlib.metadata import version
+        return version("whisp")
+    except Exception:
+        # Fallback: read from pyproject.toml
+        try:
+            import re
+            pyproject_path = Path(__file__).parent / "pyproject.toml"
+            if pyproject_path.exists():
+                content = pyproject_path.read_text(encoding="utf-8")
+                match = re.search(r'^version\s*=\s*["\']([^"\']+)["\']', content, re.MULTILINE)
+                if match:
+                    return match.group(1)
+        except Exception:
+            pass
+        return "unknown"
+
+__version__ = get_version()
+
 # Available Whisper models (faster-whisper uses model size names directly)
 WHISPER_MODELS = {
     "large": "large-v3",
@@ -145,7 +168,7 @@ CONFIG = load_config()
 def print_header(model_size: str = "large"):
     """Print a beautiful header for the application"""
     header = Text()
-    header.append("Whisper\n", style="bold cyan")
+    header.append(f"Whisp v{__version__}\n", style="bold cyan")
     model_name = WHISPER_MODELS.get(model_size, WHISPER_MODELS["large"]).split("/")[-1]
     header.append(f"Powered by OpenAI {model_name}", style="dim")
 
@@ -1777,6 +1800,12 @@ Modes:
     sort order and combined into a single output file
   - Recording: Use "record" as input to record from microphone and transcribe
         """
+    )
+
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}"
     )
 
     parser.add_argument(
